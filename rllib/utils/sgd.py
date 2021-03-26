@@ -44,6 +44,8 @@ def standardized(array):
     """
     return (array - array.mean()) / max(1e-4, array.std())
 
+def standardize(value):
+    return (value-value.mean())/(value.std()+1e-8)
 
 def minibatches(samples, sgd_minibatch_size):
     """Return a generator yielding minibatches from a sample batch.

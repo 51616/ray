@@ -133,12 +133,12 @@ def kl_and_loss_stats(policy: Policy,
     return {
         "cur_kl_coeff": policy.kl_coeff,
         "cur_lr": policy.cur_lr,
-        "total_loss": policy._total_loss,
-        "policy_loss": policy._mean_policy_loss,
-        "vf_loss": policy._mean_vf_loss,
-        "vf_explained_var": policy._vf_explained_var,
-        "kl": policy._mean_kl,
-        "entropy": policy._mean_entropy,
+        "total_loss": policy._total_loss.item(),
+        "policy_loss": policy._mean_policy_loss.item(),
+        "vf_loss": policy._mean_vf_loss.item(),
+        "vf_explained_var": policy._vf_explained_var.item(),
+        "kl": policy._mean_kl.item(),
+        "entropy": policy._mean_entropy.item(),
         "entropy_coeff": policy.entropy_coeff,
     }
 

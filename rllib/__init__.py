@@ -13,6 +13,9 @@ from ray.rllib.policy.tf_policy import TFPolicy
 from ray.rllib.policy.torch_policy import TorchPolicy
 from ray.tune.registry import register_trainable
 
+print('='*60)
+print('Using local RLlib')
+print('='*60)
 
 def _setup_logger():
     logger = logging.getLogger("ray.rllib")
