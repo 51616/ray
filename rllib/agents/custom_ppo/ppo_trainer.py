@@ -13,8 +13,9 @@ import logging
 from typing import Optional, Type
 
 from ray.rllib.agents import with_common_config
-from ray.rllib.agents.ppo_dads.vanilla_ppo_policy import VanillaPPOPolicy
-from ray.rllib.agents.ppo_dads.ppo_dads_policy import PPODADSPolicy
+from ray.rllib.agents.custom_ppo.vanilla_ppo_policy import VanillaPPOPolicy
+from ray.rllib.agents.custom_ppo.dads_ppo_policy import DADSPPOPolicy
+from ray.rllib.agents.custom_ppo.dro_ppo_policy import DROPPOPolicy
 from ray.rllib.agents.ppo.ppo_tf_policy import PPOTFPolicy
 from ray.rllib.agents.ppo.ppo_torch_policy import PPOTorchPolicy
 from ray.rllib.agents.trainer_template import build_trainer
@@ -59,22 +60,34 @@ DEFAULT_CONFIG = with_common_config({
     "shuffle_sequences": True,
     # Number of SGD iterations in each outer loop (i.e., number of epochs to
     # execute per train batch).
-    "ppo_epochs": 3,
+    "ppo_epochs": 8,
+    # Use dynamics model or not
+    "use_dynamics": True,
     # Dynamics epochs
-    "dynamics_epochs": 1,
+    "dynamics_epochs": 2,
     # Stepsize of SGD.
     "lr": 3e-4,
     # Learning rate schedule.
     "lr_schedule": None,
     # Skill dynamics learning rate.
     "dynamics_lr":3e-4,
+    # dynamics orth reg
+    "dynamics_orth_reg": True,
+    # dynamics l2 reg
+    "dynamics_l2_reg": False,
+    # dynamics spectral norm
+    "dynamics_spectral_norm": False,
+    # dynamics apply reg to hidden or not
+    "dynamics_reg_hiddens": False,
+    # dads reward scale
+    "dads_reward_scale": 1.0,
     # Coefficient of the value function loss. IMPORTANT: you must tune this if
     # you set vf_share_layers=True inside your model's config.
     "vf_loss_coeff": 1.0,
     "model": {
         # Share layers for value function. If you set this to True, it's
         # important to tune vf_loss_coeff.
-        "vf_share_layers": False,
+        "vf_share_layers": True,
     },
     # Coefficient of the entropy regularizer.
     "entropy_coeff": 0.0,
@@ -162,20 +175,20 @@ def validate_config(config: TrainerConfigDict) -> None:
             "simple_optimizer=True if this doesn't work for you.")
 
 
-def get_policy_class(config: TrainerConfigDict) -> Optional[Type[Policy]]:
-    """Policy class picker function. Class is chosen based on DL-framework.
+# def get_policy_class(config: TrainerConfigDict) -> Optional[Type[Policy]]:
+#     """Policy class picker function. Class is chosen based on DL-framework.
 
-    Args:
-        config (TrainerConfigDict): The trainer's configuration dict.
+#     Args:
+#         config (TrainerConfigDict): The trainer's configuration dict.
 
-    Returns:
-        Optional[Type[Policy]]: The Policy class to use with PPOTrainer.
-            If None, use `default_policy` provided in build_trainer().
-    """
-    # if config["framework"] == "torch":
-    #     from ray.rllib.agents.ppo.ppo_torch_policy import PPOTorchPolicy
-    # return VanillaPPOPolicy
-    return PPODADSPolicy
+#     Returns:
+#         Optional[Type[Policy]]: The Policy class to use with PPOTrainer.
+#             If None, use `default_policy` provided in build_trainer().
+#     """
+#     # if config["framework"] == "torch":
+#     #     from ray.rllib.agents.ppo.ppo_torch_policy import PPOTorchPolicy
+#     # return VanillaPPOPolicy
+#     return PPODADSPolicy
 
 
 class UpdateKL:
@@ -289,11 +302,35 @@ def execution_plan(workers: WorkerSet,
 
 # Build a child class of `Trainer`, which uses the framework specific Policy
 # determined in `get_policy_class()` above.
-PPOTrainer = build_trainer(
+# PPOTrainer = build_trainer(
+#     name="PPO",
+#     default_config=DEFAULT_CONFIG,
+#     validate_config=validate_config,
+#     default_policy=DADSPPOPolicy,
+#     get_policy_class=get_policy_class,
+#     execution_plan=execution_plan,
+# )
+
+VanillaPPOTrainer = build_trainer(
     name="PPO",
     default_config=DEFAULT_CONFIG,
     validate_config=validate_config,
-    default_policy=PPODADSPolicy,
-    get_policy_class=get_policy_class,
+    default_policy=VanillaPPOPolicy,
+    execution_plan=execution_plan,
+)
+
+DADSPPOTrainer= build_trainer(
+    name="DADS_PPO",
+    default_config=DEFAULT_CONFIG,
+    validate_config=validate_config,
+    default_policy=DADSPPOPolicy,
+    execution_plan=execution_plan,
+)
+
+DROPPOTrainer = build_trainer(
+    name="DRO_PPO",
+    default_config=DEFAULT_CONFIG,
+    validate_config=validate_config,
+    default_policy=DROPPOPolicy,
     execution_plan=execution_plan,
 )
