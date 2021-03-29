@@ -36,11 +36,11 @@ class DefaultPPOPolicy(TorchPolicy, LearningRateSchedule, EntropyCoeffSchedule,
     def __init__(self, obs_space, action_space, config,
                  model, loss, action_distribution_class):
         # update policy attr for loss calculation
-        self.framework = config['framework'] = 'torch'
-        self.kl_coeff = config['kl_coeff']
-        self.kl_target = config['kl_target']
-        self.entropy_coeff = config['entropy_coeff']
-        self.cur_lr = config['lr']
+        # self.framework = config['framework'] = 'torch'
+        # self.kl_coeff = config['kl_coeff']
+        # self.kl_target = config['kl_target']
+        # self.entropy_coeff = config['entropy_coeff']
+        # self.cur_lr = config['lr']
         # setup ._value() for gae computation
         # self.setup_value(config)
         # self.dist_class, logit_dim = ModelCatalog.get_action_dist(

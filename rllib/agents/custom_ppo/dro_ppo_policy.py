@@ -2,6 +2,7 @@ from gym.spaces import Tuple, Discrete, Dict
 import logging
 import numpy as np
 import tree
+from collections import defaultdict
 
 import ray
 from ray.rllib.agents.qmix.mixers import VDNMixer, QMixer
@@ -28,6 +29,8 @@ from ray.rllib.utils.torch_ops import apply_grad_clipping, \
     convert_to_non_torch_type
 from ray.rllib.policy.rnn_sequencing import pad_batch_to_sequences_of_same_size
 from ray.rllib.utils.sgd import minibatches, standardize
+from ray.rllib.policy.view_requirement import ViewRequirement
+
 
 # Torch must be installed.
 torch, nn = try_import_torch(error=True)
@@ -55,7 +58,6 @@ class DROPPOPolicy(DefaultPPOPolicy):
                     num_outputs=logit_dim,
                     model_config=config["model"],
                     framework='torch')
-
         super().__init__(obs_space, action_space, config,
                          model=self.model,
                          loss=ppo_surrogate_loss,
@@ -71,6 +73,7 @@ class DROPPOPolicy(DefaultPPOPolicy):
         #     auto_remove_unneeded_view_reqs=True,
         #     stats_fn=kl_and_loss_stats,
         # )
+        self.view_requirements.update({'rewards':ViewRequirement()})
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config["lr"])
 
     @override(TorchPolicy)
@@ -113,11 +116,67 @@ class DROPPOPolicy(DefaultPPOPolicy):
         # print(train_batch['obs'].shape)
         # print(train_batch[''])
         # stats = {}
+        rew = defaultdict(float)
+        traj = {}
+        # print(postprocessed_batch.count)
+        for k, v in postprocessed_batch.items():
+            if 'state_in' in k[:8]:
+                # assume all traj has the same length
+                postprocessed_batch[k] = np.tile(v, (postprocessed_batch.count//v.shape[0],1))
+            # print(k, len(postprocessed_batch[k]))
+        postprocessed_batch.seq_lens = None # remove to use split_by_episode
+        # very slow
+        # need a way to get traj from a specific partner faster
+        # could try split_by_episode
+        # for i,row in enumerate(postprocessed_batch.rows()):
+        #     # print(i)
+        #     # print(row['state_in_0'])
+        #     # print(row['state_out_0'])
 
+        #     partner_id = tuple(row['partner_id'])
+        #     # print(partner_id)
+        #     # print(row['rewards'])
+        #     rew[partner_id] += row['rewards']
+        #     for k,v in row.items():
+        #         row[k] = [v]
+        #     row = SampleBatch(row)
+        #     if partner_id not in traj:
+        #         traj[partner_id] = row
+        #     else:
+        #         # print('concat',i)
+        #         traj[partner_id] = traj[partner_id].concat(row)
+
+        for i,ep in enumerate(postprocessed_batch.split_by_episode()):
+            # print(i)
+            # print(ep['state_in_0'])
+            # print(ep['state_out_0'])
+
+            # assume a fixed set of partners in one episode
+            partner_id = tuple(ep['partner_id'][0])
+            # print(partner_id)
+            # print(ep['rewards'])
+            rew[partner_id] += sum(ep['rewards'])
+            # for k,v in ep.items():
+            #     ep[k] = [v]
+            # ep = SampleBatch(ep)
+            if partner_id not in traj:
+                traj[partner_id] = ep
+            else:
+                # print('concat',i)
+                traj[partner_id] = traj[partner_id].concat(ep)
+
+        rew_list = list(rew.items())
+        rew_list.sort(key=lambda x: x[1])
+        lowest_rew_partner = rew_list[0][0]
+        # print(rew_list)
+        train_traj = traj[lowest_rew_partner]
+        # print(train_traj.count)
+        stats = {'timesteps_used':train_traj.count}
+        # print('traj.seq_lens:', train_traj.seq_lens)
         c = 0
         for ep in range(self.ppo_epochs):
             # batch.shuffle()
-            for mb in minibatches(postprocessed_batch, self.minibatch_size):
+            for mb in minibatches(train_traj, self.minibatch_size):
                 c += 1
                 # minibatch = MultiAgentBatch({DEFAULT_POLICY_ID: mb}, mb.count)
                 # minibatch = mb.copy()
@@ -128,6 +187,9 @@ class DROPPOPolicy(DefaultPPOPolicy):
                     batch_divisibility_req=self.batch_divisibility_req,
                     view_requirements=self.view_requirements,
                 )
+                # print(mb.seq_lens)
+                # for k in mb.keys():
+                #     print(k, len(mb[k]))
                 # minibatch = mb.copy()
                 # minibatch['advantages'] = standardize(minibatch['advantages'])
                 mb["is_training"] = True
@@ -160,7 +222,7 @@ class DROPPOPolicy(DefaultPPOPolicy):
         # }
         # TODO: move this to inner loop and use average instead (0)
         
-        stats = kl_and_loss_stats(self, postprocessed_batch)
+        stats.update(kl_and_loss_stats(self, postprocessed_batch))
         return {LEARNER_STATS_KEY: stats}
 
     # def setup_value(self, config):
