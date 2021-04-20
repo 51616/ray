@@ -193,6 +193,8 @@ class DROPPOPolicy(DefaultPPOPolicy):
                 # minibatch = mb.copy()
                 # minibatch['advantages'] = standardize(minibatch['advantages'])
                 mb["is_training"] = True
+                # minibatch = mb.copy()
+                mb['advantages'] = standardize(mb['advantages'])
                 minibatch = self._lazy_tensor_dict(mb)
                 # compute the loss
                 loss = ppo_surrogate_loss(self,self.model,self.dist_class,minibatch)

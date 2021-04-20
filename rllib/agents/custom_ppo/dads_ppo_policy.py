@@ -141,14 +141,17 @@ class DADSPPOPolicy(TorchPolicy):
         # Set Model to train mode.
         if self.model:
             self.model.train()
-        train_batch["is_training"] = True
+        if self.dynamics:
+            self.dynamics.train()
+        
 
         stats = defaultdict(int)
         if self.use_dynamics:
             c = 0
             for ep in range(self.dynamics_epochs):
-                for mb in minibatches(train_batch.copy(), self.minibatch_size):
+                for mb in minibatches(train_batch, self.minibatch_size): # minibatches(train_batch.copy(), self.minibatch_size)
                     c += 1
+                    mb["is_training"] = True
                     minibatch = self._lazy_tensor_dict(mb)
 
                     obs = _unpack_obs(minibatch['obs'],
@@ -180,6 +183,7 @@ class DADSPPOPolicy(TorchPolicy):
             stats['orth_loss'] /= c
             stats['l2_loss'] /= c
 
+            self.dynamics.eval()
             # compute intrinsic reward
             with torch.no_grad():
                 batch = self._lazy_tensor_dict(train_batch)
@@ -215,9 +219,10 @@ class DADSPPOPolicy(TorchPolicy):
             # batch.shuffle()
             for mb in minibatches(batch, self.minibatch_size):
                 c += 1
-                minibatch = mb.copy()
-                minibatch['advantages'] = standardize(minibatch['advantages'])
-                minibatch = self._lazy_tensor_dict(minibatch)
+                mb["is_training"] = True
+                # minibatch = mb.copy()
+                mb['advantages'] = standardize(mb['advantages'])
+                minibatch = self._lazy_tensor_dict(mb)
                 # compute the loss
                 loss_out = ppo_surrogate_loss(self,self.model,self.dist_class,minibatch)
                 # compute gradient

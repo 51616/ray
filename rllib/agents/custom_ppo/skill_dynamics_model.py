@@ -38,20 +38,22 @@ class SkillDynamics(nn.Module):
 
         self.bn_in = nn.BatchNorm1d(self.obs_dim)
         self.bn_target = nn.BatchNorm1d(self.obs_dim, affine=False)
+        activation_fn = nn.ELU
 
-        hiddens = [SlimFC(input_dim,hidden_dim,activation_fn=nn.ReLU,
-                          initializer=lambda w: nn.init.orthogonal_(w,1.0))]
+        hiddens = [SlimFC(input_dim,hidden_dim,activation_fn=activation_fn,
+                          initializer=lambda w: nn.init.xavier_uniform_(w,1.0)),
+                    nn.LayerNorm(hidden_dim)]
 
         for _ in range(num_hiddens-1):
-            hiddens.append(SlimFC(hidden_dim,hidden_dim,activation_fn=nn.ReLU,
-                                  initializer=lambda w: nn.init.orthogonal_(w,1.0)))
+            hiddens.append(SlimFC(hidden_dim,hidden_dim,activation_fn=activation_fn,
+                                  initializer=lambda w: nn.init.xavier_uniform_(w,1.0)))
         self.hiddens = nn.Sequential(*hiddens)
 
         self.logits = SlimFC(hidden_dim + self.z_dim, self.num_experts,
-                            initializer=lambda w: nn.init.orthogonal_(w,0.01)) # nn.Linear(hidden_dim, self.num_experts)
+                            initializer=lambda w: nn.init.xavier_uniform_(w,1.0)) # nn.Linear(hidden_dim, self.num_experts)
         
         self.means = SlimFC(hidden_dim + self.z_dim, self.num_experts * self.obs_dim,
-                            initializer=lambda w: nn.init.orthogonal_(w,0.01)) # nn.Linear(hidden_dim, self.num_experts * self.obs_dim)
+                            initializer=lambda w: nn.init.xavier_uniform_(w,1.0)) # nn.Linear(hidden_dim, self.num_experts * self.obs_dim)
         if config.get('dynamics_spectral_norm',None):
             # print(self.hiddens._modules)
             # print(self.hiddens._modules['0']._model._modules['0'])

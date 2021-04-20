@@ -29,17 +29,40 @@ class PPODADSAgent(TorchModelV2, nn.Module):
 
         input_dim = int(np.prod(obs_shape)) + self.z_dim
         print(f'input dim: {input_dim}')
+        activation_fn = nn.ELU
+        initer = lambda w: nn.init.xavier_uniform_(w,1.0)
 
-        hiddens = [SlimFC(input_dim,hidden_dim,activation_fn=nn.ReLU,
-                          initializer=normc_initializer(1.0))]
-        for _ in range(num_hiddens-1):
-            hiddens.append(SlimFC(hidden_dim, hidden_dim, activation_fn=nn.ReLU,
-                                  initializer=normc_initializer(1.0)))
-        self.hiddens = nn.Sequential(*hiddens)
-        self.logits = SlimFC(hidden_dim + self.z_dim, num_outputs,
-                             initializer=lambda w: nn.init.orthogonal_(w,0.01))
-        self.values = SlimFC(hidden_dim + self.z_dim, 1,
-                             initializer=lambda w: nn.init.orthogonal_(w,1.0))
+        if options['share_hidden']:
+            hiddens = [SlimFC(input_dim,hidden_dim,activation_fn=activation_fn,
+                              initializer=activation_fn), nn.LayerNorm(hidden_dim)]
+            for _ in range(num_hiddens-1):
+                hiddens.append(SlimFC(hidden_dim, hidden_dim, activation_fn=activation_fn,
+                                      initializer=initer))
+            
+                self.hiddens = nn.Sequential(*hiddens)
+                self.logits = SlimFC(hidden_dim + self.z_dim, num_outputs,
+                                     initializer=initer)
+                self.values = SlimFC(hidden_dim + self.z_dim, 1,
+                                     initializer=initer)
+        else:
+            hiddens = [SlimFC(input_dim,hidden_dim,activation_fn=activation_fn,
+                              initializer=initer), nn.LayerNorm(hidden_dim)]
+            for _ in range(num_hiddens-1):
+                hiddens.append(SlimFC(hidden_dim, hidden_dim, activation_fn=activation_fn,
+                                      initializer=initer))
+            hiddens.append(SlimFC(hidden_dim, num_outputs,
+                                     initializer=initer))
+            self.logits = nn.Sequential(*hiddens)
+
+            hiddens = [SlimFC(input_dim,hidden_dim,activation_fn=activation_fn,
+                              initializer=initer), nn.LayerNorm(hidden_dim)]
+            for _ in range(num_hiddens-1):
+                hiddens.append(SlimFC(hidden_dim, hidden_dim, activation_fn=activation_fn,
+                                      initializer=initer))
+            hiddens.append(SlimFC(hidden_dim, 1,
+                                     initializer=initer))
+            self.values = nn.Sequential(*hiddens)
+
 
     @override(ModelV2)
     def forward(self, input_dict, state, seq_lens):
@@ -56,11 +79,18 @@ class PPODADSAgent(TorchModelV2, nn.Module):
         # inp = obs_flat
         
         # print(inp)
-        self._hidden_out = torch.cat([self.hiddens(inp),z],axis=-1)
-        logits = self.logits(self._hidden_out)
-        return logits, state.copy()
+        if self.options['share_hidden']:
+            self._hidden_out = torch.cat([self.hiddens(inp),z],axis=-1)
+            logits = self.logits(self._hidden_out)
+            return logits, state.copy()
+        else:
+            self._values = self.values(inp)
+            logits = self.logits(inp)
+            return logits, state.copy()
 
     @override(ModelV2)
     def value_function(self):
-        assert self._hidden_out is not None, "must call forward first!"
-        return torch.reshape(self.values(self._hidden_out), [-1])
+        if self.options['share_hidden']:
+            assert self._hidden_out is not None, "must call forward first!"
+            return torch.reshape(self.values(self._hidden_out), [-1])
+        return torch.reshape(self._values,[-1])

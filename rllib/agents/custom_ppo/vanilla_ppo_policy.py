@@ -77,6 +77,13 @@ class VanillaPPOPolicy(DefaultPPOPolicy):
         if self.model:
             self.model.train()
 
+        for k, v in postprocessed_batch.items():
+            if 'state_in' in k[:8]:
+                # assume all traj has the same length
+                postprocessed_batch[k] = np.tile(v, (postprocessed_batch.count//v.shape[0],1))
+            # print(k, len(postprocessed_batch[k]))
+        postprocessed_batch.seq_lens = None # remove to use .copy()
+
         c = 0
         for ep in range(self.ppo_epochs):
             for mb in minibatches(postprocessed_batch, self.minibatch_size):
@@ -90,6 +97,8 @@ class VanillaPPOPolicy(DefaultPPOPolicy):
                     view_requirements=self.view_requirements,
                 )
                 mb["is_training"] = True
+                # minibatch = mb.copy()
+                mb['advantages'] = standardize(mb['advantages'])
                 minibatch = self._lazy_tensor_dict(mb)
                 # compute the loss
                 loss = ppo_surrogate_loss(self,self.model,self.dist_class,minibatch)

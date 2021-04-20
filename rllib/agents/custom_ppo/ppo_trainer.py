@@ -282,7 +282,7 @@ def execution_plan(workers: WorkerSet,
             count_steps_by=config["multiagent"]["count_steps_by"],
         ))
     # Standardize advantages.
-    rollouts = rollouts.for_each(StandardizeFields(["advantages"]))
+    # rollouts = rollouts.for_each(StandardizeFields(["advantages"]))
 
     # Perform one training step on the combined + standardized batch.
     train_op = rollouts.for_each(
