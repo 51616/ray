@@ -1,8 +1,8 @@
 #include "ray/raylet/scheduling/cluster_resource_data.h"
 
-const std::string resource_labels[] = {
-    ray::kCPU_ResourceLabel, ray::kMemory_ResourceLabel, ray::kGPU_ResourceLabel,
-    ray::kObjectStoreMemory_ResourceLabel};
+const std::string resource_labels[] = {ray::kCPU_ResourceLabel,
+                                       ray::kMemory_ResourceLabel,
+                                       ray::kGPU_ResourceLabel, ray::kTPU_ResourceLabel};
 
 const std::string ResourceEnumToString(PredefinedResources resource) {
   // TODO (Alex): We should replace this with a protobuf enum.
@@ -62,6 +62,8 @@ std::vector<double> VectorFixedPointToVectorDouble(
 TaskRequest ResourceMapToTaskRequest(
     StringIdMap &string_to_int_map,
     const std::unordered_map<std::string, double> &resource_map) {
+  size_t i = 0;
+
   TaskRequest task_request;
 
   task_request.predefined_resources.resize(PredefinedResources_MAX);
@@ -71,14 +73,13 @@ TaskRequest ResourceMapToTaskRequest(
     task_request.predefined_resources[0].soft = false;
   }
 
-  size_t i = 0;
   for (auto const &resource : resource_map) {
     if (resource.first == ray::kCPU_ResourceLabel) {
       task_request.predefined_resources[CPU].demand = resource.second;
     } else if (resource.first == ray::kGPU_ResourceLabel) {
       task_request.predefined_resources[GPU].demand = resource.second;
-    } else if (resource.first == ray::kObjectStoreMemory_ResourceLabel) {
-      task_request.predefined_resources[OBJECT_STORE_MEM].demand = resource.second;
+    } else if (resource.first == ray::kTPU_ResourceLabel) {
+      task_request.predefined_resources[TPU].demand = resource.second;
     } else if (resource.first == ray::kMemory_ResourceLabel) {
       task_request.predefined_resources[MEM].demand = resource.second;
     } else {
@@ -92,24 +93,6 @@ TaskRequest ResourceMapToTaskRequest(
   task_request.custom_resources.resize(i);
 
   return task_request;
-}
-
-const std::vector<FixedPoint> &TaskResourceInstances::Get(
-    const std::string &resource_name, const StringIdMap &string_id_map) const {
-  if (ray::kCPU_ResourceLabel == resource_name) {
-    return predefined_resources[CPU];
-  } else if (ray::kGPU_ResourceLabel == resource_name) {
-    return predefined_resources[GPU];
-  } else if (ray::kObjectStoreMemory_ResourceLabel == resource_name) {
-    return predefined_resources[OBJECT_STORE_MEM];
-  } else if (ray::kMemory_ResourceLabel == resource_name) {
-    return predefined_resources[MEM];
-  } else {
-    int64_t resource_id = string_id_map.Get(resource_name);
-    auto it = custom_resources.find(resource_id);
-    RAY_CHECK(it != custom_resources.end());
-    return it->second;
-  }
 }
 
 TaskRequest TaskResourceInstances::ToTaskRequest() const {
@@ -169,8 +152,8 @@ NodeResources ResourceMapToNodeResources(
       node_resources.predefined_resources[CPU] = resource_capacity;
     } else if (resource.first == ray::kGPU_ResourceLabel) {
       node_resources.predefined_resources[GPU] = resource_capacity;
-    } else if (resource.first == ray::kObjectStoreMemory_ResourceLabel) {
-      node_resources.predefined_resources[OBJECT_STORE_MEM] = resource_capacity;
+    } else if (resource.first == ray::kTPU_ResourceLabel) {
+      node_resources.predefined_resources[TPU] = resource_capacity;
     } else if (resource.first == ray::kMemory_ResourceLabel) {
       node_resources.predefined_resources[MEM] = resource_capacity;
     } else {
@@ -230,8 +213,8 @@ std::string NodeResources::DebugString(StringIdMap string_to_in_map) const {
     case GPU:
       buffer << "GPU: ";
       break;
-    case OBJECT_STORE_MEM:
-      buffer << "OBJECT_STORE_MEM: ";
+    case TPU:
+      buffer << "TPU: ";
       break;
     default:
       RAY_CHECK(false) << "This should never happen.";
@@ -251,7 +234,8 @@ std::string NodeResources::DebugString(StringIdMap string_to_in_map) const {
 
 const std::string format_resource(std::string resource_name, double quantity) {
   if (resource_name == "object_store_memory" || resource_name == "memory") {
-    return std::to_string(quantity / (1024 * 1024 * 1024)) + " GiB";
+    // Convert to 50MiB chunks and then to GiB
+    return std::to_string(quantity * (50 * 1024 * 1024) / (1024 * 1024 * 1024)) + " GiB";
   }
   return std::to_string(quantity);
 }
@@ -280,8 +264,8 @@ std::string NodeResources::DictString(StringIdMap string_to_in_map) const {
     case GPU:
       name = "GPU";
       break;
-    case OBJECT_STORE_MEM:
-      name = "object_store_memory";
+    case TPU:
+      name = "TPU";
       break;
     default:
       RAY_CHECK(false) << "This should never happen.";
@@ -350,8 +334,8 @@ std::string NodeResourceInstances::DebugString(StringIdMap string_to_int_map) co
     case GPU:
       buffer << "GPU: ";
       break;
-    case OBJECT_STORE_MEM:
-      buffer << "OBJECT_STORE_MEM: ";
+    case TPU:
+      buffer << "TPU: ";
       break;
     default:
       RAY_CHECK(false) << "This should never happen.";

@@ -3,12 +3,9 @@ import numpy
 try:
     import cupy
     from cupy.cuda import nccl
-    from cupy.cuda import Device  # noqa: F401
     from cupy.cuda.nccl import get_version
     from cupy.cuda.nccl import get_build_version
     from cupy.cuda.nccl import NcclCommunicator
-    from cupy.cuda.nccl import groupStart  # noqa: F401
-    from cupy.cuda.nccl import groupEnd  # noqa: F401
 except ImportError:
     raise ImportError("NCCL in Ray requires Cupy being available!")
 
@@ -24,7 +21,7 @@ NCCL_REDUCE_OP_MAP = {
 # cupy types are the same with numpy types
 NUMPY_NCCL_DTYPE_MAP = {
     # INT types
-    numpy.int: nccl.NCCL_INT64,
+    numpy.int: nccl.NCCL_INT,
     numpy.uint8: nccl.NCCL_UINT8,
     numpy.uint32: nccl.NCCL_UINT32,
     numpy.uint64: nccl.NCCL_UINT64,
@@ -33,8 +30,7 @@ NUMPY_NCCL_DTYPE_MAP = {
     numpy.int64: nccl.NCCL_INT64,
     # FLOAT types
     numpy.half: nccl.NCCL_HALF,
-    # note that numpy.float is float64.
-    numpy.float: nccl.NCCL_FLOAT64,
+    numpy.float: nccl.NCCL_FLOAT,
     numpy.float16: nccl.NCCL_FLOAT16,
     numpy.float32: nccl.NCCL_FLOAT32,
     numpy.float64: nccl.NCCL_FLOAT64,
@@ -63,7 +59,7 @@ if torch_available():
 
     TORCH_NUMPY_DTYPE_MAP = {
         # INT types
-        torch.int: numpy.int32,
+        torch.int: numpy.int,
         torch.uint8: numpy.uint8,
         torch.int8: numpy.int8,
         torch.int32: numpy.int32,
@@ -71,16 +67,11 @@ if torch_available():
         torch.long: numpy.int64,
         # FLOAT types
         torch.half: numpy.half,
-        torch.float: numpy.float32,
+        torch.float: numpy.float,
         torch.float16: numpy.float16,
         torch.float32: numpy.float32,
         torch.float64: numpy.float64,
     }
-
-
-def get_num_gpus():
-    """Returns the number of compute-capable GPUs."""
-    return cupy.cuda.runtime.getDeviceCount()
 
 
 def get_nccl_build_version():
@@ -99,12 +90,14 @@ def create_nccl_communicator(world_size, nccl_unique_id, rank):
     """Create an NCCL communicator using NCCL APIs.
 
     Args:
-        world_size (int): the number of processes of this communicator group.
+        world_size (int): the number of processes of this communcator group.
         nccl_unique_id (str): the NCCLUniqueID for this group.
         rank (int): the rank of this process.
     Returns:
         comm (nccl.ncclComm_t): an NCCL communicator.
     """
+    # TODO(Hao): make this inside the NCCLComm class,
+    #  and implement the abort method. Make it RAII.
     comm = NcclCommunicator(world_size, nccl_unique_id, rank)
     return comm
 
@@ -119,7 +112,7 @@ def get_nccl_reduce_op(reduce_op):
     """
     if reduce_op not in NCCL_REDUCE_OP_MAP:
         raise RuntimeError(
-            "NCCL does not support reduce op: '{}'.".format(reduce_op))
+            "NCCL does not support reduce op: '{}'".format(reduce_op))
     return NCCL_REDUCE_OP_MAP[reduce_op]
 
 
@@ -156,8 +149,7 @@ def get_tensor_ptr(tensor):
     if torch_available():
         if isinstance(tensor, torch.Tensor):
             if not tensor.is_cuda:
-                raise RuntimeError("Torch tensor must be on GPU "
-                                   "when using NCCL collectives.")
+                raise RuntimeError("torch tensor must be on gpu.")
             return tensor.data_ptr()
     raise ValueError("Unsupported tensor type. Got: {}. Supported "
                      "GPU tensor types are: torch.Tensor, "
@@ -202,24 +194,6 @@ def get_tensor_strides(tensor):
                      "cupy.ndarray.".format(type(tensor)))
 
 
-def get_tensor_device(tensor):
-    """Return the GPU index of a tensor."""
-    if isinstance(tensor, cupy.ndarray):
-        try:
-            device = tensor.device.id
-        except AttributeError as exec:
-            raise RuntimeError("The tensor is not on a valid GPU.") \
-                from exec
-    elif torch_available() and isinstance(tensor, torch.Tensor):
-        device = tensor.device.index
-        if not isinstance(device, int):
-            raise RuntimeError("The tensor is not on a valid GPU.")
-    else:
-        raise ValueError("Unsupported tensor type. "
-                         "Got: {}.".format(type(tensor)))
-    return device
-
-
 def copy_tensor(dst_tensor, src_tensor):
     """Copy the content from src_tensor to dst_tensor.
 
@@ -254,21 +228,3 @@ def copy_tensor(dst_tensor, src_tensor):
         raise ValueError("Unsupported tensor type. Got: {} and {}. Supported "
                          "GPU tensor types are: torch.Tensor, cupy.ndarray."
                          .format(type(dst_tensor), type(src_tensor)))
-
-
-def get_tensor_device_list(tensors):
-    """Returns the gpu devices of the list of input tensors.
-
-    Args:
-        tensors(list): a list of tensors, each locates on a GPU.
-
-    Returns:
-        list: the list of GPU devices.
-
-    """
-    if not isinstance(tensors, list):
-        raise RuntimeError(
-            "Expect a list of tensors each locates on a GPU device. "
-            "Got: '{}'.".format(type(tensors)))
-    devices = [get_tensor_device(t) for t in tensors]
-    return devices

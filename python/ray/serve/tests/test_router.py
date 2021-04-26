@@ -9,7 +9,6 @@ import os
 import pytest
 
 import ray
-from ray.serve.config import BackendConfig
 from ray.serve.controller import TrafficPolicy
 from ray.serve.router import Query, ReplicaSet, RequestMetadata, Router
 from ray.serve.utils import get_random_letters
@@ -61,7 +60,8 @@ def task_runner_mock_actor():
 
 async def test_simple_endpoint_backend_pair(ray_instance, mock_controller,
                                             task_runner_mock_actor):
-    q = ray.remote(Router).remote(mock_controller, "svc")
+    q = ray.remote(Router).remote(mock_controller)
+    await q.setup_in_async_loop.remote()
 
     # Propogate configs
     await mock_controller.set_traffic.remote(
@@ -85,7 +85,8 @@ async def test_simple_endpoint_backend_pair(ray_instance, mock_controller,
 
 async def test_changing_backend(ray_instance, mock_controller,
                                 task_runner_mock_actor):
-    q = ray.remote(Router).remote(mock_controller, "svc")
+    q = ray.remote(Router).remote(mock_controller)
+    await q.setup_in_async_loop.remote()
 
     await mock_controller.set_traffic.remote(
         "svc", TrafficPolicy({
@@ -113,7 +114,8 @@ async def test_changing_backend(ray_instance, mock_controller,
 
 async def test_split_traffic_random(ray_instance, mock_controller,
                                     task_runner_mock_actor):
-    q = ray.remote(Router).remote(mock_controller, "svc")
+    q = ray.remote(Router).remote(mock_controller)
+    await q.setup_in_async_loop.remote()
 
     await mock_controller.set_traffic.remote(
         "svc", TrafficPolicy({
@@ -142,7 +144,8 @@ async def test_split_traffic_random(ray_instance, mock_controller,
 
 async def test_shard_key(ray_instance, mock_controller,
                          task_runner_mock_actor):
-    q = ray.remote(Router).remote(mock_controller, "svc")
+    q = ray.remote(Router).remote(mock_controller)
+    await q.setup_in_async_loop.remote()
 
     num_backends = 5
     traffic_dict = {}
@@ -184,7 +187,7 @@ async def test_shard_key(ray_instance, mock_controller,
             assert call.args[0] in runner_shard_keys[i]
 
 
-async def test_replica_set(ray_instance, mock_controller_with_name):
+async def test_replica_set(ray_instance):
     signal = SignalActor.remote()
 
     @ray.remote(num_cpus=0)
@@ -201,13 +204,9 @@ async def test_replica_set(ray_instance, mock_controller_with_name):
             return self._num_queries
 
     # We will test a scenario with two replicas in the replica set.
-    rs = ReplicaSet(
-        mock_controller_with_name[1],
-        "my_backend",
-        asyncio.get_event_loop(),
-    )
+    rs = ReplicaSet()
     workers = [MockWorker.remote() for _ in range(2)]
-    rs.set_max_concurrent_queries(BackendConfig(max_concurrent_queries=1))
+    rs.set_max_concurrent_queries(1)
     rs.update_worker_replicas(workers)
 
     # Send two queries. They should go through the router but blocked by signal

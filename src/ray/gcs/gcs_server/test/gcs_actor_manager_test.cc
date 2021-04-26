@@ -15,7 +15,6 @@
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/test_util.h"
 #include "ray/gcs/gcs_server/test/gcs_server_test_util.h"
 #include "ray/gcs/test/gcs_test_util.h"
@@ -36,15 +35,14 @@ class MockActorScheduler : public gcs::GcsActorSchedulerInterface {
 
   MOCK_METHOD1(CancelOnNode, std::vector<ActorID>(const NodeID &node_id));
   MOCK_METHOD2(CancelOnWorker, ActorID(const NodeID &node_id, const WorkerID &worker_id));
-  MOCK_METHOD3(CancelOnLeasing, void(const NodeID &node_id, const ActorID &actor_id,
-                                     const TaskID &task_id));
+  MOCK_METHOD2(CancelOnLeasing, void(const NodeID &node_id, const ActorID &actor_id));
 
   std::vector<std::shared_ptr<gcs::GcsActor>> actors;
 };
 
 class MockWorkerClient : public rpc::CoreWorkerClientInterface {
  public:
-  MockWorkerClient(instrumented_io_context &io_service) : io_service_(io_service) {}
+  MockWorkerClient(boost::asio::io_service &io_service) : io_service_(io_service) {}
 
   void WaitForActorOutOfScope(
       const rpc::WaitForActorOutOfScopeRequest &request,
@@ -80,7 +78,7 @@ class MockWorkerClient : public rpc::CoreWorkerClientInterface {
 
   std::list<rpc::ClientCallback<rpc::WaitForActorOutOfScopeReply>> callbacks_;
   std::vector<ActorID> killed_actors_;
-  instrumented_io_context &io_service_;
+  boost::asio::io_service &io_service_;
 };
 
 class GcsActorManagerTest : public ::testing::Test {
@@ -176,7 +174,7 @@ class GcsActorManagerTest : public ::testing::Test {
     promise.get_future().get();
   }
 
-  instrumented_io_context io_service_;
+  boost::asio::io_service io_service_;
   std::unique_ptr<std::thread> thread_io_service_;
   std::shared_ptr<gcs::StoreClient> store_client_;
   std::shared_ptr<gcs::GcsTableStorage> gcs_table_storage_;
@@ -737,10 +735,8 @@ TEST_F(GcsActorManagerTest, TestRaceConditionCancelLease) {
   address.set_raylet_id(node_id.Binary());
   address.set_worker_id(worker_id.Binary());
   actor->UpdateAddress(address);
-  const auto &actor_id = actor->GetActorID();
-  const auto &task_id =
-      TaskID::FromBinary(registered_actor->GetActorTableData().task_spec().task_id());
-  EXPECT_CALL(*mock_actor_scheduler_, CancelOnLeasing(node_id, actor_id, task_id));
+  const auto actor_id = actor->GetActorID();
+  EXPECT_CALL(*mock_actor_scheduler_, CancelOnLeasing(node_id, actor_id));
   gcs_actor_manager_->OnWorkerDead(owner_node_id, owner_worker_id);
 }
 

@@ -1,7 +1,5 @@
 import ray
-from ray._private.monitor import parse_resource_demands
-
-ray.experimental.internal_kv.redis = False
+from ray.monitor import parse_resource_demands
 
 
 def test_parse_resource_demands():
@@ -39,9 +37,3 @@ def test_parse_resource_demands():
     # counted as infeasible or waiting, as long as it's accounted for and
     # doesn't cause an error.
     assert len(waiting + infeasible) == 10
-
-
-if __name__ == "__main__":
-    import sys
-    import pytest
-    sys.exit(pytest.main(["-v", __file__]))

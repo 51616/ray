@@ -1,29 +1,28 @@
+import sys
 from contextlib import redirect_stdout, redirect_stderr
-import copy
 from datetime import datetime
+
+import copy
 import logging
 import os
+import ray.cloudpickle as pickle
 import platform
+
+from ray.tune.utils.trainable import TrainableUtil
+from ray.tune.utils.util import Tee
 import shutil
-import sys
 import tempfile
 import time
-from typing import Any, Dict, Union
 import uuid
 
 import ray
-import ray.cloudpickle as pickle
-from ray.tune.resources import Resources
+from ray.util.debug import log_once
 from ray.tune.result import (
     DEFAULT_RESULTS_DIR, SHOULD_CHECKPOINT, TIME_THIS_ITER_S,
     TIMESTEPS_THIS_ITER, DONE, TIMESTEPS_TOTAL, EPISODES_THIS_ITER,
     EPISODES_TOTAL, TRAINING_ITERATION, RESULT_DUPLICATE, TRIAL_INFO,
     STDOUT_FILE, STDERR_FILE)
 from ray.tune.utils import UtilMonitor
-from ray.tune.utils.placement_groups import PlacementGroupFactory
-from ray.tune.utils.trainable import TrainableUtil
-from ray.tune.utils.util import Tee
-from ray.util.debug import log_once
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ class Trainable:
         Sets up logging and points ``self.logdir`` to a directory in which
         training outputs should be placed.
 
-        Subclasses should prefer defining ``setup()`` instead of overriding
+        Subclasses should prefer defining ``build()`` instead of overriding
         ``__init__()`` directly.
 
         Args:
@@ -107,8 +106,7 @@ class Trainable:
         self._monitor = UtilMonitor(start=log_sys_usage)
 
     @classmethod
-    def default_resource_request(cls, config: Dict[str, Any]) -> \
-            Union[Resources, PlacementGroupFactory]:
+    def default_resource_request(cls, config):
         """Provides a static resource requirement for the given configuration.
 
         This can be overridden by sub-classes to set the correct trial resource
@@ -124,12 +122,8 @@ class Trainable:
                     extra_cpu=config["workers"],
                     extra_gpu=int(config["use_gpu"]) * config["workers"])
 
-        Args:
-            config[Dict[str, Any]]: The Trainable's config dict.
-
         Returns:
-            Union[Resources, PlacementGroupFactory]: A Resources object or
-                PlacementGroupFactory consumed by Tune for queueing.
+            Resources: A Resources object consumed by Tune for queueing.
         """
         return None
 
@@ -143,7 +137,7 @@ class Trainable:
         return ""
 
     def get_current_ip(self):
-        self._local_ip = ray.util.get_node_ip_address()
+        self._local_ip = ray.services.get_node_ip_address()
         return self._local_ip
 
     def train_buffered(self,
@@ -502,7 +496,7 @@ class Trainable:
             from ray.tune.logger import UnifiedLogger
 
             logdir_prefix = datetime.today().strftime("%Y-%m-%d_%H-%M-%S")
-            ray._private.utils.try_to_create_directory(DEFAULT_RESULTS_DIR)
+            ray.utils.try_to_create_directory(DEFAULT_RESULTS_DIR)
             self._logdir = tempfile.mkdtemp(
                 prefix=logdir_prefix, dir=DEFAULT_RESULTS_DIR)
             self._result_logger = UnifiedLogger(
@@ -779,7 +773,6 @@ class Trainable:
         Args:
             config (dict): Hyperparameters and other configs given.
                 Copy of `self.config`.
-
         """
         self._setup(config)
         if self._is_overridden("_setup") and log_once("_setup"):

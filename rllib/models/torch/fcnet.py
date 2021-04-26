@@ -24,11 +24,8 @@ class FullyConnectedNetwork(TorchModelV2, nn.Module):
                               model_config, name)
         nn.Module.__init__(self)
 
-        hiddens = list(model_config.get("fcnet_hiddens", [])) + \
-            list(model_config.get("post_fcnet_hiddens", []))
         activation = model_config.get("fcnet_activation")
-        if not model_config.get("fcnet_hiddens", []):
-            activation = model_config.get("post_fcnet_activation")
+        hiddens = model_config.get("fcnet_hiddens", [])
         no_final_linear = model_config.get("no_final_linear")
         self.vf_share_layers = model_config.get("vf_share_layers")
         self.free_log_std = model_config.get("free_log_std")
@@ -109,7 +106,7 @@ class FullyConnectedNetwork(TorchModelV2, nn.Module):
         self._value_branch = SlimFC(
             in_size=prev_layer_size,
             out_size=1,
-            initializer=normc_initializer(0.01),
+            initializer=normc_initializer(1.0),
             activation_fn=None)
         # Holds the current "base" output (before logits layer).
         self._features = None

@@ -85,9 +85,6 @@ class ServiceBasedActorInfoAccessor : public ActorInfoAccessor {
   Status AsyncCreateActor(const TaskSpecification &task_spec,
                           const StatusCallback &callback) override;
 
-  Status AsyncKillActor(const ActorID &actor_id, bool force_kill, bool no_restart,
-                        const StatusCallback &callback) override;
-
   Status AsyncSubscribeAll(
       const SubscribeCallback<ActorID, rpc::ActorTableData> &subscribe,
       const StatusCallback &done) override;
@@ -166,8 +163,12 @@ class ServiceBasedNodeInfoAccessor : public NodeInfoAccessor {
 
   void AsyncResubscribe(bool is_pubsub_server_restarted) override;
 
+  Status AsyncSetInternalConfig(
+      std::unordered_map<std::string, std::string> &config) override;
+
   Status AsyncGetInternalConfig(
-      const OptionalItemCallback<std::string> &callback) override;
+      const OptionalItemCallback<std::unordered_map<std::string, std::string>> &callback)
+      override;
 
  private:
   /// Save the subscribe operation in this function, so we can call it again when PubSub
@@ -443,8 +444,7 @@ class ServiceBasedPlacementGroupInfoAccessor : public PlacementGroupInfoAccessor
   virtual ~ServiceBasedPlacementGroupInfoAccessor() = default;
 
   Status AsyncCreatePlacementGroup(
-      const PlacementGroupSpecification &placement_group_spec,
-      const StatusCallback &callback) override;
+      const PlacementGroupSpecification &placement_group_spec) override;
 
   Status AsyncRemovePlacementGroup(const PlacementGroupID &placement_group_id,
                                    const StatusCallback &callback) override;
@@ -453,37 +453,11 @@ class ServiceBasedPlacementGroupInfoAccessor : public PlacementGroupInfoAccessor
       const PlacementGroupID &placement_group_id,
       const OptionalItemCallback<rpc::PlacementGroupTableData> &callback) override;
 
-  Status AsyncGetByName(
-      const std::string &name,
-      const OptionalItemCallback<rpc::PlacementGroupTableData> &callback) override;
-
   Status AsyncGetAll(
       const MultiItemCallback<rpc::PlacementGroupTableData> &callback) override;
 
   Status AsyncWaitUntilReady(const PlacementGroupID &placement_group_id,
                              const StatusCallback &callback) override;
-
- private:
-  ServiceBasedGcsClient *client_impl_;
-};
-
-class ServiceBasedInternalKVAccessor : public InternalKVAccessor {
- public:
-  explicit ServiceBasedInternalKVAccessor(ServiceBasedGcsClient *client_impl);
-  ~ServiceBasedInternalKVAccessor() override = default;
-
-  Status AsyncInternalKVKeys(
-      const std::string &prefix,
-      const OptionalItemCallback<std::vector<std::string>> &callback) override;
-  Status AsyncInternalKVGet(const std::string &key,
-                            const OptionalItemCallback<std::string> &callback) override;
-  Status AsyncInternalKVPut(const std::string &key, const std::string &value,
-                            bool overwrite,
-                            const OptionalItemCallback<int> &callback) override;
-  Status AsyncInternalKVExists(const std::string &key,
-                               const OptionalItemCallback<bool> &callback) override;
-  Status AsyncInternalKVDel(const std::string &key,
-                            const StatusCallback &callback) override;
 
  private:
   ServiceBasedGcsClient *client_impl_;

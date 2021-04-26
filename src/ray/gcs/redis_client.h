@@ -17,7 +17,6 @@
 #include <map>
 #include <string>
 
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/status.h"
 #include "ray/gcs/asio.h"
 #include "ray/util/logging.h"
@@ -31,15 +30,11 @@ class RedisContext;
 class RedisClientOptions {
  public:
   RedisClientOptions(const std::string &ip, int port, const std::string &password,
-                     bool enable_sharding_conn = true, bool enable_sync_conn = true,
-                     bool enable_async_conn = true, bool enable_subscribe_conn = true)
+                     bool is_test_client = false)
       : server_ip_(ip),
         server_port_(port),
         password_(password),
-        enable_sharding_conn_(enable_sharding_conn),
-        enable_sync_conn_(enable_sync_conn),
-        enable_async_conn_(enable_async_conn),
-        enable_subscribe_conn_(enable_subscribe_conn) {}
+        is_test_client_(is_test_client) {}
 
   // Redis server address
   std::string server_ip_;
@@ -48,13 +43,8 @@ class RedisClientOptions {
   // Password of Redis.
   std::string password_;
 
-  // Whether we enable sharding for accessing data.
-  bool enable_sharding_conn_{true};
-
-  // Whether to establish connection of contexts.
-  bool enable_sync_conn_;
-  bool enable_async_conn_;
-  bool enable_subscribe_conn_;
+  // Whether this client is used for tests.
+  bool is_test_client_{false};
 };
 
 /// \class RedisClient
@@ -70,7 +60,7 @@ class RedisClient {
   /// This io_service must be single-threaded. Because `RedisAsioClient` is
   /// non-thread safe.
   /// \return Status
-  Status Connect(instrumented_io_context &io_service);
+  Status Connect(boost::asio::io_service &io_service);
 
   // TODO(micafan) Maybe it's not necessary to use multi threads.
   /// Connect to Redis. Non-thread safe.
@@ -80,7 +70,7 @@ class RedisClient {
   /// an event loop. Each io_service must be single-threaded. Because `RedisAsioClient`
   /// is non-thread safe.
   /// \return Status
-  Status Connect(std::vector<instrumented_io_context *> io_services);
+  Status Connect(std::vector<boost::asio::io_service *> io_services);
 
   /// Disconnect with Redis. Non-thread safe.
   void Disconnect();

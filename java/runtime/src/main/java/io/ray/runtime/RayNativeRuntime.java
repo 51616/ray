@@ -20,6 +20,8 @@ import io.ray.runtime.task.NativeTaskSubmitter;
 import io.ray.runtime.task.TaskExecutor;
 import io.ray.runtime.util.BinaryFileUtil;
 import io.ray.runtime.util.JniUtils;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -56,6 +58,13 @@ public final class RayNativeRuntime extends AbstractRayRuntime {
     }
   }
 
+  private void loadConfigFromGcs() {
+    rayConfig.rayletConfigParameters.clear();
+    for (Map.Entry<String, String> entry : gcsClient.getInternalConfig().entrySet()) {
+      rayConfig.rayletConfigParameters.put(entry.getKey(), entry.getValue());
+    }
+  }
+
   @Override
   public void start() {
     try {
@@ -81,6 +90,8 @@ public final class RayNativeRuntime extends AbstractRayRuntime {
 
       gcsClient = new GcsClient(rayConfig.getRedisAddress(), rayConfig.redisPassword);
 
+      loadConfigFromGcs();
+
       if (rayConfig.getJobId() == JobId.NIL) {
         rayConfig.setJobId(gcsClient.nextJobId());
       }
@@ -98,6 +109,11 @@ public final class RayNativeRuntime extends AbstractRayRuntime {
         serializedJobConfig = jobConfigBuilder.build().toByteArray();
       }
 
+      Map<String, String> rayletConfigStringMap = new HashMap<>();
+      for (Map.Entry<String, Object> entry : rayConfig.rayletConfigParameters.entrySet()) {
+        rayletConfigStringMap.put(entry.getKey(), entry.getValue().toString());
+      }
+
       nativeInitialize(
           rayConfig.workerMode.getNumber(),
           rayConfig.nodeIp,
@@ -109,6 +125,7 @@ public final class RayNativeRuntime extends AbstractRayRuntime {
           new GcsClientOptions(rayConfig),
           numWorkersPerProcess,
           rayConfig.logDir,
+          rayletConfigStringMap,
           serializedJobConfig);
 
       taskExecutor = new NativeTaskExecutor(this);
@@ -227,6 +244,7 @@ public final class RayNativeRuntime extends AbstractRayRuntime {
       GcsClientOptions gcsClientOptions,
       int numWorkersPerProcess,
       String logDir,
+      Map<String, String> rayletConfigParameters,
       byte[] serializedJobConfig);
 
   private static native void nativeRunTaskExecutor(TaskExecutor taskExecutor);

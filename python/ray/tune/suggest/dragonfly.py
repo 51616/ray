@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import inspect
 import logging
+import pickle
 from typing import Dict, List, Optional, Union
 
 from ray.tune.result import DEFAULT_METRIC
@@ -329,6 +330,17 @@ class DragonflySearch(Searcher):
         if result and not is_nan_or_inf(result[self._metric]):
             self._opt.tell([(trial_info,
                              self._metric_op * result[self._metric])])
+
+    def save(self, checkpoint_path: str):
+        trials_object = (self._initial_points, self._opt)
+        with open(checkpoint_path, "wb") as outputFile:
+            pickle.dump(trials_object, outputFile)
+
+    def restore(self, checkpoint_dir: str):
+        with open(checkpoint_dir, "rb") as inputFile:
+            trials_object = pickle.load(inputFile)
+        self._initial_points = trials_object[0]
+        self._opt = trials_object[1]
 
     @staticmethod
     def convert_search_space(spec: Dict) -> List[Dict]:

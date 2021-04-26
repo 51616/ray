@@ -4,7 +4,6 @@
 #include <memory>
 
 #include "absl/synchronization/mutex.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/object_manager/notification/object_store_notification_manager.h"
 #include "ray/object_manager/plasma/store.h"
 
@@ -23,11 +22,8 @@ class PlasmaStoreRunner {
   }
   bool IsPlasmaObjectSpillable(const ObjectID &object_id);
 
-  int64_t GetConsumedBytes();
-
   void GetAvailableMemoryAsync(std::function<void(size_t)> callback) const {
-    main_service_.post([this, callback]() { store_->GetAvailableMemory(callback); },
-                       "PlasmaStoreRunner.GetAvailableMemory");
+    main_service_.post([this, callback]() { store_->GetAvailableMemory(callback); });
   }
 
  private:
@@ -37,7 +33,7 @@ class PlasmaStoreRunner {
   int64_t system_memory_;
   bool hugepages_enabled_;
   std::string plasma_directory_;
-  mutable instrumented_io_context main_service_;
+  mutable boost::asio::io_service main_service_;
   std::unique_ptr<PlasmaStore> store_;
   std::shared_ptr<ray::ObjectStoreNotificationManager> listener_;
 };

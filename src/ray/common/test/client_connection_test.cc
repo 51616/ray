@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "ray/common/client_connection.h"
-#include "ray/common/asio/instrumented_io_context.h"
 
 #include <boost/asio.hpp>
 #include <boost/asio/error.hpp>
@@ -57,7 +56,7 @@ class ClientConnectionTest : public ::testing::Test {
   }
 
  protected:
-  instrumented_io_context io_service_;
+  boost::asio::io_service io_service_;
   local_stream_socket in_;
   local_stream_socket out_;
   int64_t error_message_type_;

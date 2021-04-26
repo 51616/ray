@@ -18,7 +18,6 @@
 
 #include <boost/asio.hpp>
 
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/grpc_util.h"
 #include "ray/common/status.h"
 
@@ -126,14 +125,13 @@ class ServerCallImpl : public ServerCall {
   ServerCallImpl(
       const ServerCallFactory &factory, ServiceHandler &service_handler,
       HandleRequestFunction<ServiceHandler, Request, Reply> handle_request_function,
-      instrumented_io_context &io_service, std::string call_name)
+      boost::asio::io_service &io_service)
       : state_(ServerCallState::PENDING),
         factory_(factory),
         service_handler_(service_handler),
         handle_request_function_(handle_request_function),
         response_writer_(&context_),
-        io_service_(io_service),
-        call_name_(std::move(call_name)) {}
+        io_service_(io_service) {}
 
   ServerCallState GetState() const override { return state_; }
 
@@ -141,7 +139,7 @@ class ServerCallImpl : public ServerCall {
 
   void HandleRequest() override {
     if (!io_service_.stopped()) {
-      io_service_.post([this] { HandleRequestImpl(); }, call_name_);
+      io_service_.post([this] { HandleRequestImpl(); });
     } else {
       // Handle service for rpc call has stopped, we must handle the call here
       // to send reply and remove it from cq
@@ -178,14 +176,14 @@ class ServerCallImpl : public ServerCall {
   void OnReplySent() override {
     if (send_reply_success_callback_ && !io_service_.stopped()) {
       auto callback = std::move(send_reply_success_callback_);
-      io_service_.post([callback]() { callback(); }, call_name_ + ".success_callback");
+      io_service_.post([callback]() { callback(); });
     }
   }
 
   void OnReplyFailed() override {
     if (send_reply_failure_callback_ && !io_service_.stopped()) {
       auto callback = std::move(send_reply_failure_callback_);
-      io_service_.post([callback]() { callback(); }, call_name_ + ".failure_callback");
+      io_service_.post([callback]() { callback(); });
     }
   }
 
@@ -216,16 +214,13 @@ class ServerCallImpl : public ServerCall {
   grpc_impl::ServerAsyncResponseWriter<Reply> response_writer_;
 
   /// The event loop.
-  instrumented_io_context &io_service_;
+  boost::asio::io_service &io_service_;
 
   /// The request message.
   Request request_;
 
   /// The reply message.
   Reply reply_;
-
-  /// Human-readable name for this RPC call.
-  std::string call_name_;
 
   /// The callback when sending reply successes.
   std::function<void()> send_reply_success_callback_ = nullptr;
@@ -273,20 +268,19 @@ class ServerCallFactoryImpl : public ServerCallFactory {
       ServiceHandler &service_handler,
       HandleRequestFunction<ServiceHandler, Request, Reply> handle_request_function,
       const std::unique_ptr<grpc::ServerCompletionQueue> &cq,
-      instrumented_io_context &io_service, std::string call_name)
+      boost::asio::io_service &io_service)
       : service_(service),
         request_call_function_(request_call_function),
         service_handler_(service_handler),
         handle_request_function_(handle_request_function),
         cq_(cq),
-        io_service_(io_service),
-        call_name_(std::move(call_name)) {}
+        io_service_(io_service) {}
 
   void CreateCall() const override {
     // Create a new `ServerCall`. This object will eventually be deleted by
     // `GrpcServer::PollEventsFromCompletionQueue`.
     auto call = new ServerCallImpl<ServiceHandler, Request, Reply>(
-        *this, service_handler_, handle_request_function_, io_service_, call_name_);
+        *this, service_handler_, handle_request_function_, io_service_);
     /// Request gRPC runtime to starting accepting this kind of request, using the call as
     /// the tag.
     (service_.*request_call_function_)(&call->context_, &call->request_,
@@ -311,10 +305,7 @@ class ServerCallFactoryImpl : public ServerCallFactory {
   const std::unique_ptr<grpc::ServerCompletionQueue> &cq_;
 
   /// The event loop.
-  instrumented_io_context &io_service_;
-
-  /// Human-readable name for this RPC call.
-  std::string call_name_;
+  boost::asio::io_service &io_service_;
 };
 
 }  // namespace rpc

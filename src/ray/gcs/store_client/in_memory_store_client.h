@@ -16,7 +16,6 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/synchronization/mutex.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/gcs/store_client/store_client.h"
 #include "src/ray/protobuf/gcs.pb.h"
 
@@ -29,7 +28,7 @@ namespace gcs {
 /// This class is thread safe.
 class InMemoryStoreClient : public StoreClient {
  public:
-  explicit InMemoryStoreClient(instrumented_io_context &main_io_service)
+  explicit InMemoryStoreClient(boost::asio::io_service &main_io_service)
       : main_io_service_(main_io_service) {}
 
   Status AsyncPut(const std::string &table_name, const std::string &key,
@@ -88,7 +87,7 @@ class InMemoryStoreClient : public StoreClient {
 
   /// Async API Callback needs to post to main_io_service_ to ensure the orderly execution
   /// of the callback.
-  instrumented_io_context &main_io_service_;
+  boost::asio::io_service &main_io_service_;
 };
 
 }  // namespace gcs

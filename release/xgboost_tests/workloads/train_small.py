@@ -31,5 +31,3 @@ if __name__ == "__main__":
         ray_params=ray_params,
         xgboost_params=None,
     )
-
-    print("PASSED.")

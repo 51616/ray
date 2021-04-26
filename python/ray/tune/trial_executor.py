@@ -103,7 +103,6 @@ class TrialExecutor:
         Args:
             error (bool): Whether to mark this trial as terminated in error.
             error_msg (str): Optional error message.
-
         """
         raise NotImplementedError("Subclasses of TrialExecutor must provide "
                                   "stop_trial() method")
@@ -172,7 +171,7 @@ class TrialExecutor:
             if trial.uses_placement_groups:
                 return
             if trial.status == Trial.PENDING:
-                if not self.has_resources_for_trial(trial):
+                if not self.has_resources(trial.resources):
                     resource_string = trial.resources.summary_string()
                     trial_resource_help_msg = trial.get_trainable_cls(
                     ).resource_help(trial.config)
@@ -278,14 +277,10 @@ class TrialExecutor:
         """Returns True if GPUs are detected on the cluster."""
         return None
 
-    def cleanup(self, trial_runner):
+    def cleanup(self, trial):
         """Ensures that trials are cleaned up after stopping."""
         pass
 
     def in_staging_grace_period(self) -> bool:
         """Returns True if trials have recently been staged."""
         return False
-
-    def set_max_pending_trials(self, max_pending: int):
-        """Set the maximum number of allowed pending trials."""
-        pass

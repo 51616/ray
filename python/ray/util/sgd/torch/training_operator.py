@@ -165,7 +165,7 @@ class TrainingOperator:
         """Helper method to return items in same format as original_items."""
         if isinstance(original_items, tuple):
             return tuple(items)
-        elif isinstance(original_items, list):
+        elif isinstance(original_items, Iterable):
             # Items is already a list.
             return items
         else:
@@ -272,10 +272,11 @@ class TrainingOperator:
         if apex_args and not isinstance(apex_args, dict):
             raise ValueError("apex_args needs to be a dict object.")
         apex_args = apex_args if apex_args else {}
+
         return_vals = []
         logger.debug("Registering models.")
         self._original_models = models
-        if isinstance(self._original_models, torch.nn.Module):
+        if not isinstance(self._original_models, Iterable):
             self._original_models = [self._original_models]
         assert all(
             isinstance(model, nn.Module) for model in self._original_models), (
@@ -287,7 +288,7 @@ class TrainingOperator:
 
         logger.debug("Registering optimizers.")
         self._optimizers = optimizers
-        if isinstance(self._optimizers, torch.optim.Optimizer):
+        if not isinstance(self._optimizers, Iterable):
             self._optimizers = [self._optimizers]
 
         if schedulers:

@@ -251,9 +251,8 @@ class LocalSyncParallelOptimizer:
             feed_dict.update(tower.loss_graph.extra_compute_grad_feed_dict())
 
         fetches = {"train": self._train_op}
-        for tower_num, tower in enumerate(self._towers):
-            tower_fetch = tower.loss_graph._get_grad_and_stats_fetches()
-            fetches["tower_{}".format(tower_num)] = tower_fetch
+        for tower in self._towers:
+            fetches.update(tower.loss_graph._get_grad_and_stats_fetches())
 
         return sess.run(fetches, feed_dict=feed_dict)
 

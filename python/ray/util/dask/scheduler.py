@@ -1,18 +1,17 @@
 import atexit
-import threading
 from collections import defaultdict
-from dataclasses import dataclass
 from multiprocessing.pool import ThreadPool
+import threading
 
 import ray
 
 from dask.core import istask, ishashable, _execute_task
+from dask.local import get_async, apply_sync
 from dask.system import CPU_COUNT
 from dask.threaded import pack_exception, _thread_get_id
 
 from .callbacks import local_ray_callbacks, unpack_ray_callbacks
 from .common import unpack_object_refs
-from .scheduler_utils import get_async, apply_sync
 
 main_thread = threading.current_thread()
 default_pool = None
@@ -79,7 +78,6 @@ def ray_dask_get(dsk, keys, **kwargs):
                 pools[thread][num_workers] = pool
 
     ray_callbacks = kwargs.pop("ray_callbacks", None)
-    persist = kwargs.pop("ray_persist", False)
 
     with local_ray_callbacks(ray_callbacks) as ray_callbacks:
         # Unpack the Ray-specific callbacks.
@@ -117,10 +115,7 @@ def ray_dask_get(dsk, keys, **kwargs):
         # Ray tasks are done. Otherwise, no intermediate objects will be
         # cleaned up until all Ray tasks are done.
         del dsk
-        if persist:
-            result = object_refs
-        else:
-            result = ray_get_unpack(object_refs)
+        result = ray_get_unpack(object_refs)
         if ray_finish_cbs is not None:
             for cb in ray_finish_cbs:
                 cb(result)
@@ -154,9 +149,7 @@ def _apply_async_wrapper(apply_async, real_func, *extra_args, **extra_kwargs):
         pass `real_func` in its place. To be passed to `dask.local.get_async`.
     """
 
-    def wrapper(func, args=(), kwds=None, callback=None):  # noqa: M511
-        if not kwds:
-            kwds = {}
+    def wrapper(func, args=(), kwds={}, callback=None):  # noqa: M511
         return apply_async(
             real_func,
             args=args + extra_args,
@@ -277,31 +270,19 @@ def _rayify_task(
                     return alternate_return
 
         func, args = task[0], task[1:]
-        if func is multiple_return_get:
-            return _execute_task(task, deps)
         # If the function's arguments contain nested object references, we must
         # unpack said object references into a flat set of arguments so that
         # Ray properly tracks the object dependencies between Ray tasks.
-        arg_object_refs, repack = unpack_object_refs(args, deps)
+        object_refs, repack = unpack_object_refs(args, deps)
         # Submit the task using a wrapper function.
-        object_refs = dask_task_wrapper.options(
-            name=f"dask:{key!s}",
-            num_returns=(1 if not isinstance(func, MultipleReturnFunc) else
-                         func.num_returns),
-        ).remote(
-            func,
-            repack,
-            key,
-            ray_pretask_cbs,
-            ray_posttask_cbs,
-            *arg_object_refs,
-        )
+        object_ref = dask_task_wrapper.options(name=f"dask:{key!s}").remote(
+            func, repack, key, ray_pretask_cbs, ray_posttask_cbs, *object_refs)
 
         if ray_postsubmit_cbs is not None:
             for cb in ray_postsubmit_cbs:
-                cb(task, key, deps, object_refs)
+                cb(task, key, deps, object_ref)
 
-        return object_refs
+        return object_ref
     elif not ishashable(task):
         return task
     elif task in deps:
@@ -344,7 +325,6 @@ def dask_task_wrapper(func, repack, key, ray_pretask_cbs, ray_posttask_cbs,
     actual_args = [_execute_task(a, repacked_deps) for a in repacked_args]
     # Execute the actual underlying Dask task.
     result = func(*actual_args)
-
     if ray_posttask_cbs is not None:
         for cb, pre_state in zip(ray_posttask_cbs, pre_states):
             if cb is not None:
@@ -413,7 +393,6 @@ def ray_dask_get_sync(dsk, keys, **kwargs):
     """
 
     ray_callbacks = kwargs.pop("ray_callbacks", None)
-    persist = kwargs.pop("ray_persist", False)
 
     with local_ray_callbacks(ray_callbacks) as ray_callbacks:
         # Unpack the Ray-specific callbacks.
@@ -449,25 +428,9 @@ def ray_dask_get_sync(dsk, keys, **kwargs):
         # Ray tasks are done. Otherwise, no intermediate objects will be
         # cleaned up until all Ray tasks are done.
         del dsk
-        if persist:
-            result = object_refs
-        else:
-            result = ray_get_unpack(object_refs)
+        result = ray_get_unpack(object_refs)
         if ray_finish_cbs is not None:
             for cb in ray_finish_cbs:
                 cb(result)
 
         return result
-
-
-@dataclass
-class MultipleReturnFunc:
-    func: callable
-    num_returns: int
-
-    def __call__(self, *args, **kwargs):
-        return self.func(*args, **kwargs)
-
-
-def multiple_return_get(multiple_returns, idx):
-    return multiple_returns[idx]

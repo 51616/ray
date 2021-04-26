@@ -15,7 +15,6 @@
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/gcs/gcs_server/gcs_resource_manager.h"
 #include "ray/gcs/test/gcs_test_util.h"
 
@@ -30,7 +29,7 @@ class GcsResourceManagerTest : public ::testing::Test {
         std::make_shared<gcs::GcsResourceManager>(io_service_, nullptr, nullptr);
   }
 
-  instrumented_io_context io_service_;
+  boost::asio::io_service io_service_;
   std::shared_ptr<gcs::GcsResourceManager> gcs_resource_manager_;
 };
 

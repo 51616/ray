@@ -20,7 +20,6 @@
 #include <thread>
 #include <utility>
 
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/status.h"
 #include "ray/rpc/server_call.h"
 
@@ -32,8 +31,7 @@ namespace rpc {
       new ServerCallFactoryImpl<SERVICE, SERVICE##Handler, HANDLER##Request,    \
                                 HANDLER##Reply>(                                \
           service_, &SERVICE::AsyncService::Request##HANDLER, service_handler_, \
-          &SERVICE##Handler::Handle##HANDLER, cq, main_service_,                \
-          #SERVICE ".grpc_server." #HANDLER));                                  \
+          &SERVICE##Handler::Handle##HANDLER, cq, main_service_));              \
   server_call_factories->emplace_back(std::move(HANDLER##_call_factory));
 
 // Define a void RPC client method.
@@ -131,7 +129,7 @@ class GrpcService {
   ///
   /// \param[in] main_service The main event loop, to which service handler functions
   /// will be posted.
-  explicit GrpcService(instrumented_io_context &main_service)
+  explicit GrpcService(boost::asio::io_service &main_service)
       : main_service_(main_service) {}
 
   /// Destruct this gRPC service.
@@ -154,7 +152,7 @@ class GrpcService {
       std::vector<std::unique_ptr<ServerCallFactory>> *server_call_factories) = 0;
 
   /// The main event loop, to which the service handler functions will be posted.
-  instrumented_io_context &main_service_;
+  boost::asio::io_service &main_service_;
 
   friend class GrpcServer;
 };

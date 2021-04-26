@@ -1,9 +1,7 @@
-from collections import Counter
 import os
 import json
 import random
 import unittest
-import time
 
 import numpy as np
 import sys
@@ -21,7 +19,6 @@ from ray.tune.schedulers import (FIFOScheduler, HyperBandScheduler,
                                  TrialScheduler, HyperBandForBOHB)
 
 from ray.tune.schedulers.pbt import explore, PopulationBasedTrainingReplay
-from ray.tune.suggest._mock import _MockSearcher
 from ray.tune.trial import Trial, Checkpoint
 from ray.tune.trial_executor import TrialExecutor
 from ray.tune.resources import Resources
@@ -221,7 +218,6 @@ class _MockTrialExecutor(TrialExecutor):
         trial.logger_running = True
         trial.restored_checkpoint = checkpoint_obj.value
         trial.status = Trial.RUNNING
-        return True
 
     def stop_trial(self, trial, error=False, error_msg=None):
         trial.status = Trial.ERROR if error else Trial.TERMINATED
@@ -239,7 +235,6 @@ class _MockTrialExecutor(TrialExecutor):
 class _MockTrialRunner():
     def __init__(self, scheduler):
         self._scheduler_alg = scheduler
-        self.search_alg = None
         self.trials = []
         self.trial_executor = _MockTrialExecutor()
 
@@ -265,9 +260,6 @@ class _MockTrialRunner():
 
     def get_trials(self):
         return self.trials
-
-    def has_resources_for_trial(self, trial):
-        return True
 
     def has_resources(self, resources):
         return True
@@ -766,44 +758,6 @@ class BOHBSuite(unittest.TestCase):
         self.assertSequenceEqual([t.status for t in trials],
                                  [Trial.PAUSED, Trial.PENDING, Trial.PAUSED])
 
-    def testNonstopBOHB(self):
-        from ray.tune.suggest.bohb import TuneBOHB
-
-        def train(cfg, checkpoint_dir=None):
-            start = 0
-            if checkpoint_dir:
-                with open(os.path.join(checkpoint_dir, "checkpoint")) as f:
-                    start = int(f.read())
-
-            for i in range(start, 200):
-
-                time.sleep(0.1)
-                tune.report(episode_reward_mean=i)
-                with tune.checkpoint_dir(i) as checkpoint_dir:
-                    with open(os.path.join(checkpoint_dir, "checkpoint"),
-                              "w") as f:
-                        f.write(str(i))
-
-        config = {"test_variable": tune.uniform(0, 20)}
-        sched = HyperBandForBOHB(
-            max_t=10, reduction_factor=3, stop_last_trials=False)
-        alg = TuneBOHB(max_concurrent=4)
-        analysis = tune.run(
-            train,
-            scheduler=sched,
-            search_alg=alg,
-            stop={"training_iteration": 32},
-            num_samples=20,
-            config=config,
-            metric="episode_reward_mean",
-            mode="min",
-            verbose=1,
-            fail_fast="raise")
-        counter = Counter(
-            t.last_result.get("training_iteration") for t in analysis.trials)
-        assert 32 in counter
-        assert counter[32] > 1
-
 
 class _MockTrial(Trial):
     def __init__(self, i, config):
@@ -887,19 +841,6 @@ class PopulationBasedTestingSuite(unittest.TestCase):
                         TrialScheduler.CONTINUE)
         pbt.reset_stats()
         return pbt, runner
-
-    def testSearchError(self):
-        pbt, runner = self.basicSetup(num_trials=0)
-
-        def mock_train(config):
-            return 1
-
-        with self.assertRaises(ValueError):
-            tune.run(
-                mock_train,
-                config={"x": 1},
-                scheduler=pbt,
-                search_alg=_MockSearcher())
 
     def testMetricError(self):
         pbt, runner = self.basicSetup()
@@ -2080,7 +2021,7 @@ class AsyncHyperBandSuite(unittest.TestCase):
     def testPBTNanInf(self):
         scheduler = PopulationBasedTraining(
             metric="episode_reward_mean", mode="max")
-        t1, t2, t3 = self.nanInfSetup(scheduler, runner=MagicMock())
+        t1, t2, t3 = self.nanInfSetup(scheduler)
         scheduler.on_trial_complete(None, t1, result(10, np.nan))
         scheduler.on_trial_complete(None, t2, result(10, float("inf")))
         scheduler.on_trial_complete(None, t3, result(10, float("-inf")))

@@ -30,24 +30,29 @@ class MagicCounter:
     def __init__(self, increment):
         self.increment = increment
 
-    @serve.batch(max_batch_size=5)
-    async def handle_batch(self, base_number):
-        result = []
-        for b in base_number:
-            ans = b + self.increment
-            result.append(ans)
-        return result
-
-    async def __call__(self, request, base_number=None):
+    @serve.accept_batch
+    def __call__(self, starlette_request_list, base_number=None):
         # batch_size = serve.context.batch_size
         if serve.context.web:
-            base_number = int(request.query_params.get("base_number", "0"))
-        return await self.handle_batch(base_number)
+            result = []
+            for starlette_request in starlette_request_list:
+                base_number = int(
+                    starlette_request.query_params.get("base_number", "0"))
+                result.append(base_number)
+            return list(map(lambda x: x + self.increment, result))
+        else:
+            result = []
+            for b in base_number:
+                ans = b + self.increment
+                result.append(ans)
+            return result
 
 
-serve.start()
-serve.create_backend("counter:v1", MagicCounter, 42)  # increment=42
-serve.create_endpoint("magic_counter", backend="counter:v1", route="/counter")
+client = serve.start()
+client.create_backend(
+    "counter:v1", MagicCounter, 42,
+    config={"max_batch_size": 5})  # increment=42
+client.create_endpoint("magic_counter", backend="counter:v1", route="/counter")
 
 print("Sending ten queries via HTTP")
 for i in range(10):
@@ -59,7 +64,7 @@ for i in range(10):
     time.sleep(0.2)
 
 print("Sending ten queries via Python")
-handle = serve.get_handle("magic_counter")
+handle = client.get_handle("magic_counter")
 for i in range(10):
     print("> Pinging handle.remote(base_number={})".format(i))
     result = ray.get(handle.remote(base_number=i))

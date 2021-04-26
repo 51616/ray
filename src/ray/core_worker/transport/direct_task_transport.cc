@@ -134,6 +134,7 @@ void CoreWorkerDirectTaskSubmitter::OnWorkerIdle(
   if (!lease_entry.lease_client) {
     return;
   }
+  RAY_CHECK(lease_entry.lease_client);
 
   auto &scheduling_key_entry = scheduling_key_entries_[scheduling_key];
   auto &current_queue = scheduling_key_entry.task_queue;
@@ -350,7 +351,7 @@ void CoreWorkerDirectTaskSubmitter::PushNormalTask(
     const SchedulingKey &scheduling_key, const TaskSpecification &task_spec,
     const google::protobuf::RepeatedPtrField<rpc::ResourceMapEntry> &assigned_resources) {
   auto task_id = task_spec.TaskId();
-  auto request = std::make_unique<rpc::PushTaskRequest>();
+  auto request = std::unique_ptr<rpc::PushTaskRequest>(new rpc::PushTaskRequest);
   bool is_actor = task_spec.IsActorTask();
   bool is_actor_creation = task_spec.IsActorCreationTask();
 
@@ -438,8 +439,8 @@ Status CoreWorkerDirectTaskSubmitter::CancelTask(TaskSpecification task_spec,
           if (scheduled_tasks.empty()) {
             CancelWorkerLeaseIfNeeded(scheduling_key);
           }
-          RAY_UNUSED(task_finisher_->PendingTaskFailed(
-              task_spec.TaskId(), rpc::ErrorType::TASK_CANCELLED, nullptr));
+          RAY_UNUSED(task_finisher_->PendingTaskFailed(task_spec.TaskId(),
+                                                       rpc::ErrorType::TASK_CANCELLED));
           return Status::OK();
         }
       }

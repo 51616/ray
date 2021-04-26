@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "ray/gcs/gcs_client/global_state_accessor.h"
-#include "ray/common/asio/instrumented_io_context.h"
 
 #include <boost/algorithm/string.hpp>
 
@@ -21,8 +20,10 @@ namespace ray {
 namespace gcs {
 
 GlobalStateAccessor::GlobalStateAccessor(const std::string &redis_address,
-                                         const std::string &redis_password) {
-  RAY_LOG(DEBUG) << "Redis server address = " << redis_address;
+                                         const std::string &redis_password,
+                                         bool is_test) {
+  RAY_LOG(DEBUG) << "Redis server address = " << redis_address
+                 << ", is test flag = " << is_test;
   std::vector<std::string> address;
   boost::split(address, redis_address, boost::is_any_of(":"));
   RAY_CHECK(address.size() == 2);
@@ -30,13 +31,10 @@ GlobalStateAccessor::GlobalStateAccessor(const std::string &redis_address,
   options.server_ip_ = address[0];
   options.server_port_ = std::stoi(address[1]);
   options.password_ = redis_password;
-  // Only synchronous connection is needed.
-  options.enable_sync_conn_ = true;
-  options.enable_async_conn_ = false;
-  options.enable_subscribe_conn_ = false;
+  options.is_test_client_ = is_test;
   gcs_client_.reset(new ServiceBasedGcsClient(options));
 
-  io_service_.reset(new instrumented_io_context());
+  io_service_.reset(new boost::asio::io_service());
 
   std::promise<bool> promise;
   thread_io_service_.reset(new std::thread([this, &promise] {
@@ -157,6 +155,27 @@ std::vector<std::string> GlobalStateAccessor::GetAllAvailableResources() {
   return available_resources;
 }
 
+std::string GlobalStateAccessor::GetInternalConfig() {
+  rpc::StoredConfig config_proto;
+  std::promise<void> promise;
+  auto on_done = [&config_proto, &promise](
+                     Status status,
+                     const boost::optional<std::unordered_map<std::string, std::string>>
+                         stored_raylet_config) {
+    RAY_CHECK_OK(status);
+    if (stored_raylet_config.has_value()) {
+      config_proto.mutable_config()->insert(stored_raylet_config->begin(),
+                                            stored_raylet_config->end());
+    }
+    promise.set_value();
+  };
+
+  RAY_CHECK_OK(gcs_client_->Nodes().AsyncGetInternalConfig(on_done));
+  promise.get_future().get();
+
+  return config_proto.SerializeAsString();
+}
+
 std::unique_ptr<std::string> GlobalStateAccessor::GetAllResourceUsage() {
   std::unique_ptr<std::string> resource_batch_data;
   std::promise<bool> promise;
@@ -236,18 +255,6 @@ std::unique_ptr<std::string> GlobalStateAccessor::GetPlacementGroupInfo(
   RAY_CHECK_OK(gcs_client_->PlacementGroups().AsyncGet(
       placement_group_id, TransformForOptionalItemCallback<rpc::PlacementGroupTableData>(
                               placement_group_table_data, promise)));
-  promise.get_future().get();
-  return placement_group_table_data;
-}
-
-std::unique_ptr<std::string> GlobalStateAccessor::GetPlacementGroupByName(
-    const std::string &placement_group_name) {
-  std::unique_ptr<std::string> placement_group_table_data;
-  std::promise<bool> promise;
-  RAY_CHECK_OK(gcs_client_->PlacementGroups().AsyncGetByName(
-      placement_group_name,
-      TransformForOptionalItemCallback<rpc::PlacementGroupTableData>(
-          placement_group_table_data, promise)));
   promise.get_future().get();
   return placement_group_table_data;
 }

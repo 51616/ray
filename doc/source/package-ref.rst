@@ -172,10 +172,16 @@ get_current_placement_group
 Custom Metrics APIs
 -------------------
 
-Counter
-~~~~~~~
+Metric
+~~~~~~
 
-.. autoclass:: ray.util.metrics.Counter
+.. autoclass:: ray.util.metrics.Metric
+   :members:
+
+Count
+~~~~~
+
+.. autoclass:: ray.util.metrics.Count
    :members:
 
 Gauge
@@ -189,16 +195,6 @@ Histogram
 
 .. autoclass:: ray.util.metrics.Histogram
    :members:
-
-.. _runtime-context-apis:
-
-Runtime Context APIs
---------------------
-
-.. autofunction:: ray.runtime_context.get_runtime_context
-
-.. autoclass:: ray.runtime_context.RuntimeContext
-    :members:
 
 .. _package-ref-debugging-apis:
 
@@ -215,7 +211,6 @@ Experimental APIs
 .. automodule:: ray.experimental
    :members:
 
-.. _ray-cli:
 
 The Ray Command Line API
 ------------------------

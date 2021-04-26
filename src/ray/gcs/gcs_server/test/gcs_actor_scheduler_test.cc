@@ -15,7 +15,6 @@
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/gcs/gcs_server/test/gcs_server_test_util.h"
 #include "ray/gcs/test/gcs_test_util.h"
 
@@ -52,7 +51,7 @@ class GcsActorSchedulerTest : public ::testing::Test {
   }
 
  protected:
-  instrumented_io_context io_service_;
+  boost::asio::io_service io_service_;
   std::shared_ptr<gcs::StoreClient> store_client_;
   std::shared_ptr<GcsServerMocker::MockedGcsActorTable> gcs_actor_table_;
   std::shared_ptr<GcsServerMocker::MockRayletClient> raylet_client_;
@@ -263,8 +262,7 @@ TEST_F(GcsActorSchedulerTest, TestLeasingCancelledWhenLeasing) {
   ASSERT_EQ(1, raylet_client_->callbacks.size());
 
   // Cancel the lease request.
-  const auto &task_id = TaskID::FromBinary(create_actor_request.task_spec().task_id());
-  gcs_actor_scheduler_->CancelOnLeasing(node_id, actor->GetActorID(), task_id);
+  gcs_actor_scheduler_->CancelOnLeasing(node_id, actor->GetActorID());
   ASSERT_EQ(1, raylet_client_->num_workers_requested);
   ASSERT_EQ(1, raylet_client_->callbacks.size());
 

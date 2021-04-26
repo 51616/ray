@@ -17,7 +17,6 @@
 #include <memory>
 #include <vector>
 
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/status.h"
 #include "ray/object_manager/notification/object_store_notification_manager.h"
 
@@ -36,7 +35,7 @@ class ObjectStoreNotificationManagerIPC : public ObjectStoreNotificationManager 
   /// \param store_socket_name The store socket to connect to.
   /// \param exit_on_error The manager will exit with error when it fails
   ///                      to process messages from socket.
-  ObjectStoreNotificationManagerIPC(instrumented_io_context &io_service,
+  ObjectStoreNotificationManagerIPC(boost::asio::io_service &io_service,
                                     const std::string &store_socket_name,
                                     bool exit_on_error = true);
 

@@ -416,8 +416,6 @@ def validate_config(config):
     Raises:
         ValueError: In case something is wrong with the config.
     """
-    if config["num_gpus"] > 1:
-        raise ValueError("`num_gpus` > 1 not yet supported for MB-MPO!")
     if config["framework"] != "torch":
         logger.warning("MB-MPO only supported in PyTorch so far! Switching to "
                        "`framework=torch`.")

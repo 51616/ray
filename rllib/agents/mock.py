@@ -16,6 +16,8 @@ class _MockTrainer(Trainer):
         "test_variable": 1,
         "num_workers": 0,
         "user_checkpoint_freq": 0,
+        "object_store_memory_per_worker": 0,
+        "object_store_memory": 0,
         "framework": "tf",
     })
 
@@ -77,6 +79,8 @@ class _SigmoidFakeData(_MockTrainer):
         "iter_time": 10,
         "iter_timesteps": 1,
         "num_workers": 0,
+        "object_store_memory_per_worker": 0,
+        "object_store_memory": 0,
     })
 
     def step(self):
@@ -101,6 +105,8 @@ class _ParameterTuningTrainer(_MockTrainer):
         "iter_time": 10,
         "iter_timesteps": 1,
         "num_workers": 0,
+        "object_store_memory_per_worker": 0,
+        "object_store_memory": 0,
     })
 
     def step(self):
@@ -112,14 +118,14 @@ class _ParameterTuningTrainer(_MockTrainer):
             info={})
 
 
-def _trainer_import_failed(trace):
+def _agent_import_failed(trace):
     """Returns dummy agent class for if PyTorch etc. is not installed."""
 
-    class _TrainerImportFailed(Trainer):
-        _name = "TrainerImportFailed"
+    class _AgentImportFailed(Trainer):
+        _name = "AgentImportFailed"
         _default_config = with_common_config({})
 
         def setup(self, config):
             raise ImportError(trace)
 
-    return _TrainerImportFailed
+    return _AgentImportFailed

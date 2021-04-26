@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "absl/synchronization/mutex.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/id.h"
 #include "ray/common/status.h"
 #include "ray/object_manager/format/object_manager_generated.h"
@@ -33,7 +32,7 @@ namespace ray {
 /// Encapsulates notification handling from the object store.
 class ObjectStoreNotificationManager {
  public:
-  ObjectStoreNotificationManager(instrumented_io_context &io_service)
+  ObjectStoreNotificationManager(boost::asio::io_service &io_service)
       : main_service_(&io_service), num_adds_processed_(0), num_removes_processed_(0) {}
   virtual ~ObjectStoreNotificationManager() {}
   /// Subscribe to notifications of objects added to local store.
@@ -60,8 +59,7 @@ class ObjectStoreNotificationManager {
     // TODO(suquark): Use strand in boost asio to enforce sequential execution.
     absl::MutexLock lock(&store_add_mutex_);
     for (auto &handler : add_handlers_) {
-      main_service_->post([handler, object_info]() { handler(object_info); },
-                          "ObjectStoreNotification.StoreAdd");
+      main_service_->post([handler, object_info]() { handler(object_info); });
     }
     num_adds_processed_++;
   }
@@ -69,8 +67,7 @@ class ObjectStoreNotificationManager {
   void ProcessStoreRemove(const ObjectID &object_id) {
     absl::MutexLock lock(&store_remove_mutex_);
     for (auto &handler : rem_handlers_) {
-      main_service_->post([handler, object_id]() { handler(object_id); },
-                          "ObjectStoreNotification.StoreRemove");
+      main_service_->post([handler, object_id]() { handler(object_id); });
     }
     num_removes_processed_++;
   }
@@ -89,7 +86,7 @@ class ObjectStoreNotificationManager {
  private:
   /// Weak reference to main service. We ensure this object is destroyed before
   /// main_service_ is stopped.
-  instrumented_io_context *main_service_;
+  boost::asio::io_service *main_service_;
   std::vector<std::function<void(const object_manager::protocol::ObjectInfoT &)>>
       add_handlers_;
   std::vector<std::function<void(const ray::ObjectID &)>> rem_handlers_;

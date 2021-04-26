@@ -1,4 +1,3 @@
-import copy
 import importlib
 import logging
 import json
@@ -11,17 +10,6 @@ logger = logging.getLogger(__name__)
 
 # For caching provider instantiations across API calls of one python session
 _provider_instances = {}
-
-# Minimal config for compatibility with legacy-style external configs.
-MINIMAL_EXTERNAL_CONFIG = {
-    "available_node_types": {
-        "ray.head.default": {},
-        "ray.worker.default": {},
-    },
-    "head_node_type": "ray.head.default",
-    "head_node": {},
-    "worker_nodes": {},
-}
 
 
 def _import_aws(provider_config):
@@ -204,7 +192,7 @@ def _get_default_config(provider_config):
     package outside the autoscaler.
     """
     if provider_config["type"] == "external":
-        return copy.deepcopy(MINIMAL_EXTERNAL_CONFIG)
+        return {}
     load_config = _DEFAULT_CONFIGS.get(provider_config["type"])
     if load_config is None:
         raise NotImplementedError("Unsupported node provider: {}".format(

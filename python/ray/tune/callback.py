@@ -41,14 +41,6 @@ class Callback:
 
     """
 
-    def setup(self):
-        """Called once at the very beginning of training.
-
-        Any Callback setup should be added here (setting environment
-        variables, etc.)
-        """
-        pass
-
     def on_step_begin(self, iteration: int, trials: List["Trial"], **info):
         """Called at the start of each tuning loop step.
 
@@ -174,10 +166,6 @@ class CallbackList:
 
     def __init__(self, callbacks: List[Callback]):
         self._callbacks = callbacks
-
-    def setup(self):
-        for callback in self._callbacks:
-            callback.setup()
 
     def on_step_begin(self, **info):
         for callback in self._callbacks:

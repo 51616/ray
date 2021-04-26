@@ -92,6 +92,18 @@ void GcsNodeManager::HandleGetAllNodeInfo(const rpc::GetAllNodeInfoRequest &requ
   ++counts_[CountType::GET_ALL_NODE_INFO_REQUEST];
 }
 
+void GcsNodeManager::HandleSetInternalConfig(const rpc::SetInternalConfigRequest &request,
+                                             rpc::SetInternalConfigReply *reply,
+                                             rpc::SendReplyCallback send_reply_callback) {
+  auto on_done = [reply, send_reply_callback, request](const Status &status) {
+    RAY_LOG(DEBUG) << "Set internal config: " << request.config().DebugString();
+    GCS_RPC_SEND_REPLY(send_reply_callback, reply, status);
+  };
+  RAY_CHECK_OK(gcs_table_storage_->InternalConfigTable().Put(UniqueID::Nil(),
+                                                             request.config(), on_done));
+  ++counts_[CountType::SET_INTERNAL_CONFIG_REQUEST];
+}
+
 void GcsNodeManager::HandleGetInternalConfig(const rpc::GetInternalConfigRequest &request,
                                              rpc::GetInternalConfigReply *reply,
                                              rpc::SendReplyCallback send_reply_callback) {
@@ -99,7 +111,7 @@ void GcsNodeManager::HandleGetInternalConfig(const rpc::GetInternalConfigRequest
                                const ray::Status &status,
                                const boost::optional<rpc::StoredConfig> &config) {
     if (config.has_value()) {
-      reply->set_config(config.get().config());
+      reply->mutable_config()->CopyFrom(config.get());
     }
     GCS_RPC_SEND_REPLY(send_reply_callback, reply, status);
   };
@@ -148,8 +160,7 @@ std::shared_ptr<rpc::GcsNodeInfo> GcsNodeManager::RemoveNode(
       // TODO(rkn): Define this constant somewhere else.
       std::string type = "node_removed";
       std::ostringstream error_message;
-      error_message << "The node with node id: " << node_id
-                    << " and ip: " << removed_node->node_manager_address()
+      error_message << "The node with node id " << node_id
                     << " has been marked dead because the detector"
                     << " has missed too many heartbeats from it. This can happen when a "
                        "raylet crashes unexpectedly or has lagging heartbeats.";
@@ -222,6 +233,8 @@ std::string GcsNodeManager::DebugString() const {
          << counts_[CountType::UNREGISTER_NODE_REQUEST]
          << ", GetAllNodeInfo request count: "
          << counts_[CountType::GET_ALL_NODE_INFO_REQUEST]
+         << ", SetInternalConfig request count: "
+         << counts_[CountType::SET_INTERNAL_CONFIG_REQUEST]
          << ", GetInternalConfig request count: "
          << counts_[CountType::GET_INTERNAL_CONFIG_REQUEST] << "}";
   return stream.str();

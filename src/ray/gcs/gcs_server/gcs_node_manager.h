@@ -56,6 +56,11 @@ class GcsNodeManager : public rpc::NodeInfoHandler {
                             rpc::GetAllNodeInfoReply *reply,
                             rpc::SendReplyCallback send_reply_callback) override;
 
+  /// Handle set internal config.
+  void HandleSetInternalConfig(const rpc::SetInternalConfigRequest &request,
+                               rpc::SetInternalConfigReply *reply,
+                               rpc::SendReplyCallback send_reply_callback) override;
+
   /// Handle get internal config.
   void HandleGetInternalConfig(const rpc::GetInternalConfigRequest &request,
                                rpc::GetInternalConfigReply *reply,
@@ -147,8 +152,9 @@ class GcsNodeManager : public rpc::NodeInfoHandler {
     REGISTER_NODE_REQUEST = 0,
     UNREGISTER_NODE_REQUEST = 1,
     GET_ALL_NODE_INFO_REQUEST = 2,
-    GET_INTERNAL_CONFIG_REQUEST = 3,
-    CountType_MAX = 4,
+    SET_INTERNAL_CONFIG_REQUEST = 3,
+    GET_INTERNAL_CONFIG_REQUEST = 4,
+    CountType_MAX = 5,
   };
   uint64_t counts_[CountType::CountType_MAX] = {0};
 };

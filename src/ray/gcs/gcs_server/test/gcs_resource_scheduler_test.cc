@@ -15,7 +15,6 @@
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/gcs/gcs_server/gcs_resource_scheduler.h"
 #include "ray/gcs/test/gcs_test_util.h"
 
@@ -90,7 +89,7 @@ class GcsResourceSchedulerTest : public ::testing::Test {
   std::shared_ptr<gcs::GcsResourceScheduler> gcs_resource_scheduler_;
 
  private:
-  instrumented_io_context io_service_;
+  boost::asio::io_service io_service_;
 };
 
 TEST_F(GcsResourceSchedulerTest, TestPackScheduleResourceLeaks) {

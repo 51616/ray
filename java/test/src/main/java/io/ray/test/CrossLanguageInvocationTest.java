@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.testng.Assert;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
@@ -50,6 +51,11 @@ public class CrossLanguageInvocationTest extends BaseTest {
     System.setProperty(
         "ray.job.code-search-path",
         System.getProperty("java.class.path") + File.pathSeparator + tempDir.getAbsolutePath());
+  }
+
+  @AfterClass
+  public void afterClass() {
+    System.clearProperty("ray.job.code-search-path");
   }
 
   @Test

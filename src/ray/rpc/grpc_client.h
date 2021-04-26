@@ -30,8 +30,7 @@ namespace rpc {
 // to make it easier to implement a new RPC client.
 #define INVOKE_RPC_CALL(SERVICE, METHOD, request, callback, rpc_client) \
   (rpc_client->CallMethod<METHOD##Request, METHOD##Reply>(              \
-      &SERVICE::Stub::PrepareAsync##METHOD, request, callback,          \
-      #SERVICE ".grpc_client." #METHOD))
+      &SERVICE::Stub::PrepareAsync##METHOD, request, callback))
 
 // Define a void RPC client method.
 #define VOID_RPC_CLIENT_METHOD(SERVICE, METHOD, rpc_client, SPECS)   \
@@ -87,10 +86,9 @@ class GrpcClient {
   template <class Request, class Reply>
   void CallMethod(
       const PrepareAsyncFunction<GrpcService, Request, Reply> prepare_async_function,
-      const Request &request, const ClientCallback<Reply> &callback,
-      std::string call_name = "UNKNOWN_RPC") {
+      const Request &request, const ClientCallback<Reply> &callback) {
     auto call = client_call_manager_.CreateCall<GrpcService, Request, Reply>(
-        *stub_, prepare_async_function, request, callback, std::move(call_name));
+        *stub_, prepare_async_function, request, callback);
     RAY_CHECK(call != nullptr);
   }
 

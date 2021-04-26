@@ -21,7 +21,6 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/id.h"
 #include "ray/common/status.h"
 #include "ray/gcs/redis_async_context.h"
@@ -121,7 +120,7 @@ class RedisCallbackManager {
     CallbackItem() = default;
 
     CallbackItem(const RedisCallback &callback, bool is_subscription, int64_t start_time,
-                 instrumented_io_context &io_service)
+                 boost::asio::io_service &io_service)
         : callback_(callback),
           is_subscription_(is_subscription),
           start_time_(start_time),
@@ -130,15 +129,14 @@ class RedisCallbackManager {
     void Dispatch(std::shared_ptr<CallbackReply> &reply) {
       std::shared_ptr<CallbackItem> self = shared_from_this();
       if (callback_ != nullptr) {
-        io_service_->post([self, reply]() { self->callback_(std::move(reply)); },
-                          "RedisCallbackManager.DispatchCallback");
+        io_service_->post([self, reply]() { self->callback_(std::move(reply)); });
       }
     }
 
     RedisCallback callback_;
     bool is_subscription_;
     int64_t start_time_;
-    instrumented_io_context *io_service_;
+    boost::asio::io_service *io_service_;
   };
 
   /// Allocate an index at which we can add a callback later on.
@@ -146,7 +144,7 @@ class RedisCallbackManager {
 
   /// Add a callback at an optionally specified index.
   int64_t AddCallback(const RedisCallback &function, bool is_subscription,
-                      instrumented_io_context &io_service, int64_t callback_index = -1);
+                      boost::asio::io_service &io_service, int64_t callback_index = -1);
 
   /// Remove a callback.
   void RemoveCallback(int64_t callback_index);
@@ -167,7 +165,7 @@ class RedisCallbackManager {
 
 class RedisContext {
  public:
-  RedisContext(instrumented_io_context &io_service)
+  RedisContext(boost::asio::io_service &io_service)
       : io_service_(io_service), context_(nullptr) {}
 
   ~RedisContext();
@@ -180,8 +178,7 @@ class RedisContext {
   Status PingPort(const std::string &address, int port);
 
   Status Connect(const std::string &address, int port, bool sharding,
-                 const std::string &password, bool enable_sync_conn = true,
-                 bool enable_async_conn = true, bool enable_subscribe_conn = true);
+                 const std::string &password);
 
   /// Run an operation on some table key synchronously.
   ///
@@ -307,14 +304,14 @@ class RedisContext {
     return *async_redis_subscribe_context_;
   }
 
-  instrumented_io_context &io_service() { return io_service_; }
+  boost::asio::io_service &io_service() { return io_service_; }
 
  private:
   // These functions avoid problems with dependence on hiredis headers with clang-cl.
   static int GetRedisError(redisContext *context);
   static void FreeRedisReply(void *reply);
 
-  instrumented_io_context &io_service_;
+  boost::asio::io_service &io_service_;
   redisContext *context_;
   std::unique_ptr<RedisAsyncContext> redis_async_context_;
   std::unique_ptr<RedisAsyncContext> async_redis_subscribe_context_;

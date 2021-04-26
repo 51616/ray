@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/rpc/grpc_server.h"
 #include "ray/rpc/server_call.h"
 #include "src/ray/protobuf/node_manager.grpc.pb.h"
@@ -25,7 +24,6 @@ namespace rpc {
 
 /// NOTE: See src/ray/core_worker/core_worker.h on how to add a new grpc handler.
 #define RAY_NODE_MANAGER_RPC_HANDLERS                             \
-  RPC_SERVICE_HANDLER(NodeManagerService, RequestResourceReport)  \
   RPC_SERVICE_HANDLER(NodeManagerService, RequestWorkerLease)     \
   RPC_SERVICE_HANDLER(NodeManagerService, ReturnWorker)           \
   RPC_SERVICE_HANDLER(NodeManagerService, ReleaseUnusedWorkers)   \
@@ -39,8 +37,7 @@ namespace rpc {
   RPC_SERVICE_HANDLER(NodeManagerService, CancelResourceReserve)  \
   RPC_SERVICE_HANDLER(NodeManagerService, RequestObjectSpillage)  \
   RPC_SERVICE_HANDLER(NodeManagerService, RestoreSpilledObject)   \
-  RPC_SERVICE_HANDLER(NodeManagerService, ReleaseUnusedBundles)   \
-  RPC_SERVICE_HANDLER(NodeManagerService, GetSystemConfig)
+  RPC_SERVICE_HANDLER(NodeManagerService, ReleaseUnusedBundles)
 
 /// Interface of the `NodeManagerService`, see `src/ray/protobuf/node_manager.proto`.
 class NodeManagerServiceHandler {
@@ -55,11 +52,6 @@ class NodeManagerServiceHandler {
   /// \param[in] request The request message.
   /// \param[out] reply The reply message.
   /// \param[in] send_reply_callback The callback to be called when the request is done.
-
-  virtual void HandleRequestResourceReport(
-      const rpc::RequestResourceReportRequest &request,
-      rpc::RequestResourceReportReply *reply,
-      rpc::SendReplyCallback send_reply_callback) = 0;
 
   virtual void HandleRequestWorkerLease(const RequestWorkerLeaseRequest &request,
                                         RequestWorkerLeaseReply *reply,
@@ -118,10 +110,6 @@ class NodeManagerServiceHandler {
   virtual void HandleReleaseUnusedBundles(const ReleaseUnusedBundlesRequest &request,
                                           ReleaseUnusedBundlesReply *reply,
                                           SendReplyCallback send_reply_callback) = 0;
-
-  virtual void HandleGetSystemConfig(const GetSystemConfigRequest &request,
-                                     GetSystemConfigReply *reply,
-                                     SendReplyCallback send_reply_callback) = 0;
 };
 
 /// The `GrpcService` for `NodeManagerService`.
@@ -131,7 +119,7 @@ class NodeManagerGrpcService : public GrpcService {
   ///
   /// \param[in] io_service See super class.
   /// \param[in] handler The service handler that actually handle the requests.
-  NodeManagerGrpcService(instrumented_io_context &io_service,
+  NodeManagerGrpcService(boost::asio::io_service &io_service,
                          NodeManagerServiceHandler &service_handler)
       : GrpcService(io_service), service_handler_(service_handler){};
 

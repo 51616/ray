@@ -7,7 +7,7 @@ from copy import deepcopy
 from typing import Any, Dict, Optional, Tuple
 try:
     import kaggle_environments
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     pass
 import numpy as np
 from gym.spaces import Box

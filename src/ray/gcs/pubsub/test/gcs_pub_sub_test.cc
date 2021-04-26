@@ -17,7 +17,6 @@
 #include <memory>
 
 #include "gtest/gtest.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/test_util.h"
 
 namespace ray {
@@ -37,7 +36,7 @@ class GcsPubSubTest : public ::testing::Test {
     }));
 
     gcs::RedisClientOptions redis_client_options(
-        "127.0.0.1", TEST_REDIS_SERVER_PORTS.front(), "", /*enable_sharding_conn=*/false);
+        "127.0.0.1", TEST_REDIS_SERVER_PORTS.front(), "", true);
     client_ = std::make_shared<gcs::RedisClient>(redis_client_options);
     RAY_CHECK_OK(client_->Connect(io_service_));
     pub_sub_ = std::make_shared<gcs::GcsPubSub>(client_);
@@ -109,7 +108,7 @@ class GcsPubSubTest : public ::testing::Test {
   absl::Mutex vector_mutex_;
 
  private:
-  instrumented_io_context io_service_;
+  boost::asio::io_service io_service_;
   std::unique_ptr<std::thread> thread_io_service_;
 };
 

@@ -29,7 +29,7 @@ ServiceBasedGcsClient::ServiceBasedGcsClient(const GcsClientOptions &options)
       last_reconnect_timestamp_ms_(0),
       last_reconnect_address_(std::make_pair("", -1)) {}
 
-Status ServiceBasedGcsClient::Connect(instrumented_io_context &io_service) {
+Status ServiceBasedGcsClient::Connect(boost::asio::io_service &io_service) {
   RAY_CHECK(!is_connected_);
 
   if (options_.server_ip_.empty()) {
@@ -38,12 +38,8 @@ Status ServiceBasedGcsClient::Connect(instrumented_io_context &io_service) {
   }
 
   // Connect to redis.
-  // We don't access redis shardings in GCS client, so we set `enable_sharding_conn` to
-  // false.
-  RedisClientOptions redis_client_options(
-      options_.server_ip_, options_.server_port_, options_.password_,
-      /*enable_sharding_conn=*/false, options_.enable_sync_conn_,
-      options_.enable_async_conn_, options_.enable_subscribe_conn_);
+  RedisClientOptions redis_client_options(options_.server_ip_, options_.server_port_,
+                                          options_.password_, options_.is_test_client_);
   redis_client_.reset(new RedisClient(redis_client_options));
   RAY_CHECK_OK(redis_client_->Connect(io_service));
 
@@ -86,12 +82,10 @@ Status ServiceBasedGcsClient::Connect(instrumented_io_context &io_service) {
   error_accessor_.reset(new ServiceBasedErrorInfoAccessor(this));
   worker_accessor_.reset(new ServiceBasedWorkerInfoAccessor(this));
   placement_group_accessor_.reset(new ServiceBasedPlacementGroupInfoAccessor(this));
-  internal_kv_accessor_ = std::make_unique<ServiceBasedInternalKVAccessor>(this);
+
   // Init gcs service address check timer.
-  periodical_runner_.reset(new PeriodicalRunner(io_service));
-  periodical_runner_->RunFnPeriodically(
-      [this] { PeriodicallyCheckGcsServerAddress(); },
-      RayConfig::instance().gcs_service_address_check_interval_milliseconds());
+  detect_timer_.reset(new boost::asio::deadline_timer(io_service));
+  PeriodicallyCheckGcsServerAddress();
 
   is_connected_ = true;
 
@@ -102,7 +96,7 @@ Status ServiceBasedGcsClient::Connect(instrumented_io_context &io_service) {
 void ServiceBasedGcsClient::Disconnect() {
   RAY_CHECK(is_connected_);
   is_connected_ = false;
-  periodical_runner_.reset();
+  detect_timer_->cancel();
   gcs_pub_sub_.reset();
   redis_client_->Disconnect();
   redis_client_.reset();
@@ -158,6 +152,19 @@ void ServiceBasedGcsClient::PeriodicallyCheckGcsServerAddress() {
       GcsServiceFailureDetected(rpc::GcsServiceFailureType::GCS_SERVER_RESTART);
     }
   }
+
+  auto check_period = boost::posix_time::milliseconds(
+      RayConfig::instance().gcs_service_address_check_interval_milliseconds());
+  detect_timer_->expires_from_now(check_period);
+  detect_timer_->async_wait([this](const boost::system::error_code &error) {
+    if (error == boost::asio::error::operation_aborted) {
+      // `operation_aborted` is set when `detect_timer_` is canceled or destroyed.
+      return;
+    }
+    RAY_CHECK(!error) << "Checking gcs server address failed with error: "
+                      << error.message();
+    PeriodicallyCheckGcsServerAddress();
+  });
 }
 
 void ServiceBasedGcsClient::GcsServiceFailureDetected(rpc::GcsServiceFailureType type) {
@@ -197,10 +204,10 @@ void ServiceBasedGcsClient::ReconnectGcsServer() {
       if (last_reconnect_address_ == address &&
           (current_sys_time_ms() - last_reconnect_timestamp_ms_) <
               RayConfig::instance().minimum_gcs_reconnect_interval_milliseconds()) {
-        RAY_LOG(DEBUG)
+        RAY_LOG(INFO)
             << "Repeated reconnection in "
             << RayConfig::instance().minimum_gcs_reconnect_interval_milliseconds()
-            << " milliseconds, return directly.";
+            << "milliseconds, return directly.";
         return;
       }
 

@@ -123,6 +123,10 @@ class WorkerSet:
         remote_args = {
             "num_cpus": self._remote_config["num_cpus_per_worker"],
             "num_gpus": self._remote_config["num_gpus_per_worker"],
+            # memory=0 is an error, but memory=None means no limits.
+            "memory": self._remote_config["memory_per_worker"] or None,
+            "object_store_memory": self.
+            _remote_config["object_store_memory_per_worker"] or None,
             "resources": self._remote_config["custom_resources_per_worker"],
         }
         cls = RolloutWorker.as_remote(**remote_args).remote
@@ -339,7 +343,7 @@ class WorkerSet:
             policy_config=config,
             worker_index=worker_index,
             num_workers=num_workers,
-            record_env=config["record_env"],
+            monitor_path=self._logdir if config["monitor"] else None,
             log_dir=self._logdir,
             log_level=config["log_level"],
             callbacks=config["callbacks"],
@@ -355,6 +359,7 @@ class WorkerSet:
             fake_sampler=config["fake_sampler"],
             extra_python_environs=extra_python_environs,
             spaces=spaces,
+            _use_trajectory_view_api=config["_use_trajectory_view_api"],
         )
 
         return worker

@@ -6,7 +6,7 @@ from ray import serve
 from ray.serve import BackendConfig
 
 ray.init()
-serve.start()
+client = serve.start()
 
 
 class Threshold:
@@ -24,10 +24,10 @@ class Threshold:
 
 
 backend_config = BackendConfig(user_config={"threshold": 0.01})
-serve.create_backend("threshold", Threshold, config=backend_config)
-serve.create_endpoint("threshold", backend="threshold", route="/threshold")
+client.create_backend("threshold", Threshold, config=backend_config)
+client.create_endpoint("threshold", backend="threshold", route="/threshold")
 print(requests.get("http://127.0.0.1:8000/threshold").text)  # true, probably
 
 backend_config = BackendConfig(user_config={"threshold": 0.99})
-serve.update_backend_config("threshold", backend_config)
+client.update_backend_config("threshold", backend_config)
 print(requests.get("http://127.0.0.1:8000/threshold").text)  # false, probably

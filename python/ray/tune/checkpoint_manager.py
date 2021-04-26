@@ -4,7 +4,6 @@ import gc
 import logging
 
 from ray.tune.result import TRAINING_ITERATION
-from ray.tune.utils.util import flatten_dict
 
 logger = logging.getLogger(__name__)
 
@@ -165,8 +164,7 @@ class CheckpointManager:
         return [queue_item.value for queue_item in checkpoints]
 
     def _priority(self, checkpoint):
-        result = flatten_dict(checkpoint.result)
-        priority = result[self._checkpoint_score_attr]
+        priority = checkpoint.result[self._checkpoint_score_attr]
         return -priority if self._checkpoint_score_desc else priority
 
     def __getstate__(self):

@@ -9,8 +9,7 @@ import grpc
 import uuid
 
 from ray.worker import print_worker_logs
-from ray.util.client.common import CLIENT_SERVER_MAX_THREADS
-from ray._private.ray_logging import global_worker_stdstream_dispatcher
+from ray.ray_logging import global_worker_stdstream_dispatcher
 import ray.core.generated.ray_client_pb2 as ray_client_pb2
 import ray.core.generated.ray_client_pb2_grpc as ray_client_pb2_grpc
 
@@ -82,25 +81,8 @@ def log_status_change_thread(log_queue, request_iterator):
 
 
 class LogstreamServicer(ray_client_pb2_grpc.RayletLogStreamerServicer):
-    def __init__(self):
-        super().__init__()
-        self.num_clients = 0
-        self.client_lock = threading.Lock()
-
     def Logstream(self, request_iterator, context):
-        initialized = False
-        with self.client_lock:
-            threshold = CLIENT_SERVER_MAX_THREADS / 2
-            if self.num_clients + 1 >= threshold:
-                context.set_code(grpc.StatusCode.RESOURCE_EXHAUSTED)
-                logger.warning(
-                    f"Logstream: Num clients {self.num_clients} has reached "
-                    f"the threshold {threshold}. Rejecting new connection.")
-                return
-            self.num_clients += 1
-            initialized = True
-            logger.info("New logs connection established. "
-                        f"Total clients: {self.num_clients}")
+        logger.info("New logs connection")
         log_queue = queue.Queue()
         thread = threading.Thread(
             target=log_status_change_thread,
@@ -117,6 +99,3 @@ class LogstreamServicer(ray_client_pb2_grpc.RayletLogStreamerServicer):
             logger.debug(f"Closing log channel: {e}")
         finally:
             thread.join()
-            with self.client_lock:
-                if initialized:
-                    self.num_clients -= 1

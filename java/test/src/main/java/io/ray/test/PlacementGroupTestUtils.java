@@ -1,7 +1,6 @@
 package io.ray.test;
 
-import io.ray.api.PlacementGroups;
-import io.ray.api.options.PlacementGroupCreationOptions;
+import io.ray.api.Ray;
 import io.ray.api.placementgroup.PlacementGroup;
 import io.ray.api.placementgroup.PlacementStrategy;
 import java.util.ArrayList;
@@ -17,8 +16,7 @@ public class PlacementGroupTestUtils {
       int bundleSize,
       PlacementStrategy strategy,
       Double resourceSize,
-      String groupName,
-      boolean isGlobal) {
+      String groupName) {
     List<Map<String, Double>> bundles = new ArrayList<>();
 
     for (int i = 0; i < bundleSize; i++) {
@@ -26,36 +24,25 @@ public class PlacementGroupTestUtils {
       bundle.put(resourceName, resourceSize);
       bundles.add(bundle);
     }
-    PlacementGroupCreationOptions.Builder builder =
-        new PlacementGroupCreationOptions.Builder().setBundles(bundles).setStrategy(strategy);
-    if (isGlobal) {
-      builder.setGlobalName(groupName);
-    } else {
-      builder.setName(groupName);
-    }
 
-    return PlacementGroups.createPlacementGroup(builder.build());
+    return Ray.createPlacementGroup(groupName, bundles, strategy);
   }
 
   public static PlacementGroup createSpecifiedSimpleGroup(
-      String resourceName,
-      int bundleSize,
-      PlacementStrategy strategy,
-      Double resourceSize,
-      boolean isGlobal) {
+      String resourceName, int bundleSize, PlacementStrategy strategy, Double resourceSize) {
     return createNameSpecifiedSimpleGroup(
-        resourceName, bundleSize, strategy, resourceSize, "unnamed_group", isGlobal);
+        resourceName, bundleSize, strategy, resourceSize, "unnamed_group");
   }
 
   public static PlacementGroup createSimpleGroup() {
-    return createSpecifiedSimpleGroup("CPU", 1, PlacementStrategy.PACK, 1.0, false);
+    return createSpecifiedSimpleGroup("CPU", 1, PlacementStrategy.PACK, 1.0);
   }
 
   public static void createBundleSizeInvalidGroup() {
-    createSpecifiedSimpleGroup("CPU", 0, PlacementStrategy.PACK, 1.0, false);
+    createSpecifiedSimpleGroup("CPU", 0, PlacementStrategy.PACK, 1.0);
   }
 
   public static void createBundleResourceInvalidGroup() {
-    createSpecifiedSimpleGroup("CPU", 1, PlacementStrategy.PACK, 0.0, false);
+    createSpecifiedSimpleGroup("CPU", 1, PlacementStrategy.PACK, 0.0);
   }
 }

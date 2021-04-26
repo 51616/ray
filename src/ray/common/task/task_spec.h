@@ -28,7 +28,7 @@ static inline rpc::ObjectReference GetReferenceForActorDummyObject(
 };
 
 /// Wrapper class of protobuf `TaskSpec`, see `common.proto` for details.
-/// TODO(ekl) we should consider passing around std::unique_ptr<TaskSpecification>
+/// TODO(ekl) we should consider passing around std::unique_ptrs<TaskSpecification>
 /// instead `const TaskSpecification`, since this class is actually mutable.
 class TaskSpecification : public MessageWrapper<rpc::TaskSpec> {
  public:
@@ -174,6 +174,8 @@ class TaskSpecification : public MessageWrapper<rpc::TaskSpec> {
   ObjectID ActorCreationDummyObjectId() const;
 
   ObjectID PreviousActorTaskDummyObjectId() const;
+
+  bool IsDirectCall() const;
 
   int MaxActorConcurrency() const;
 

@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
-#include "ray/common/asio/instrumented_io_context.h"
 #include "ray/common/id.h"
 #include "ray/common/status.h"
 #include "ray/gcs/gcs_client.h"
@@ -40,9 +39,8 @@ class OwnershipBasedObjectDirectory : public ObjectDirectory {
   /// usually be the same event loop that the given gcs_client runs on.
   /// \param gcs_client A Ray GCS client to request object and node
   /// information from.
-  OwnershipBasedObjectDirectory(instrumented_io_context &io_service,
-                                std::shared_ptr<gcs::GcsClient> &gcs_client,
-                                std::function<void(const ObjectID &)> mark_as_failed);
+  OwnershipBasedObjectDirectory(boost::asio::io_service &io_service,
+                                std::shared_ptr<gcs::GcsClient> &gcs_client);
 
   virtual ~OwnershipBasedObjectDirectory() {}
 
@@ -72,8 +70,6 @@ class OwnershipBasedObjectDirectory : public ObjectDirectory {
  private:
   /// The client call manager used to create the RPC clients.
   rpc::ClientCallManager client_call_manager_;
-  /// The callback used to mark an object as failed.
-  std::function<void(const ObjectID &)> mark_as_failed_;
   /// Cache of gRPC clients to workers (not necessarily running on this node).
   /// Also includes the number of inflight requests to each worker - when this
   /// reaches zero, the client will be deleted and a new one will need to be created

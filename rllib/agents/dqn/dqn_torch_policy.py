@@ -150,7 +150,7 @@ def build_q_model_and_distribution(
 
     if config["hiddens"]:
         # try to infer the last layer size, otherwise fall back to 256
-        num_outputs = ([256] + list(config["model"]["fcnet_hiddens"]))[-1]
+        num_outputs = ([256] + config["model"]["fcnet_hiddens"])[-1]
         config["model"]["no_final_linear"] = True
     else:
         num_outputs = action_space.n
@@ -161,7 +161,7 @@ def build_q_model_and_distribution(
         isinstance(getattr(policy, "exploration", None), ParameterNoise)
         or config["exploration_config"]["type"] == "ParameterNoise")
 
-    model = ModelCatalog.get_model_v2(
+    policy.q_model = ModelCatalog.get_model_v2(
         obs_space=obs_space,
         action_space=action_space,
         num_outputs=num_outputs,
@@ -180,7 +180,7 @@ def build_q_model_and_distribution(
         #  generically into ModelCatalog.
         add_layer_norm=add_layer_norm)
 
-    policy.q_func_vars = model.variables()
+    policy.q_func_vars = policy.q_model.variables()
 
     policy.target_q_model = ModelCatalog.get_model_v2(
         obs_space=obs_space,
@@ -203,7 +203,7 @@ def build_q_model_and_distribution(
 
     policy.target_q_func_vars = policy.target_q_model.variables()
 
-    return model, TorchCategorical
+    return policy.q_model, TorchCategorical
 
 
 def get_distribution_inputs_and_class(
@@ -214,11 +214,7 @@ def get_distribution_inputs_and_class(
         explore: bool = True,
         is_training: bool = False,
         **kwargs) -> Tuple[TensorType, type, List[TensorType]]:
-    q_vals = compute_q_values(
-        policy,
-        model, {"obs": obs_batch},
-        explore=explore,
-        is_training=is_training)
+    q_vals = compute_q_values(policy, model, obs_batch, explore, is_training)
     q_vals = q_vals[0] if isinstance(q_vals, tuple) else q_vals
 
     policy.q_values = q_vals
@@ -239,16 +235,18 @@ def build_q_losses(policy: Policy, model, _,
     """
     config = policy.config
     # Q-network evaluation.
-    q_t, q_logits_t, q_probs_t, _ = compute_q_values(
+    q_t, q_logits_t, q_probs_t = compute_q_values(
         policy,
-        model, {"obs": train_batch[SampleBatch.CUR_OBS]},
+        policy.q_model,
+        train_batch[SampleBatch.CUR_OBS],
         explore=False,
         is_training=True)
 
     # Target Q-network evaluation.
-    q_tp1, q_logits_tp1, q_probs_tp1, _ = compute_q_values(
+    q_tp1, q_logits_tp1, q_probs_tp1 = compute_q_values(
         policy,
-        policy.target_q_model, {"obs": train_batch[SampleBatch.NEXT_OBS]},
+        policy.target_q_model,
+        train_batch[SampleBatch.NEXT_OBS],
         explore=False,
         is_training=True)
 
@@ -265,10 +263,10 @@ def build_q_losses(policy: Policy, model, _,
     # compute estimate of best possible value starting from state at t + 1
     if config["double_q"]:
         q_tp1_using_online_net, q_logits_tp1_using_online_net, \
-            q_dist_tp1_using_online_net, _ = compute_q_values(
+            q_dist_tp1_using_online_net = compute_q_values(
                 policy,
-                model,
-                {"obs": train_batch[SampleBatch.NEXT_OBS]},
+                policy.q_model,
+                train_batch[SampleBatch.NEXT_OBS],
                 explore=False,
                 is_training=True)
         q_tp1_best_using_online_net = torch.argmax(q_tp1_using_online_net, 1)
@@ -329,15 +327,15 @@ def before_loss_init(policy: Policy, obs_space: gym.spaces.Space,
 
 def compute_q_values(policy: Policy,
                      model: ModelV2,
-                     input_dict,
-                     state_batches=None,
-                     seq_lens=None,
-                     explore=None,
+                     obs: TensorType,
+                     explore,
                      is_training: bool = False):
     config = policy.config
 
-    input_dict["is_training"] = is_training
-    model_out, state = model(input_dict, state_batches or [], seq_lens)
+    model_out, state = model({
+        SampleBatch.CUR_OBS: obs,
+        "is_training": is_training,
+    }, [], None)
 
     if config["num_atoms"] > 1:
         (action_scores, z, support_logits_per_action, logits,
@@ -369,7 +367,7 @@ def compute_q_values(policy: Policy,
     else:
         value = action_scores
 
-    return value, logits, probs_or_logits, state
+    return value, logits, probs_or_logits
 
 
 def grad_process_and_td_error_fn(policy: Policy,

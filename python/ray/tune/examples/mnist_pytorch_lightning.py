@@ -2,8 +2,6 @@
 # yapf: disable
 
 # __import_lightning_begin__
-import math
-
 import torch
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, random_split
@@ -133,8 +131,7 @@ def train_mnist_tune(config, data_dir=None, num_epochs=10, num_gpus=0):
     model = LightningMNISTClassifier(config, data_dir)
     trainer = pl.Trainer(
         max_epochs=num_epochs,
-        # If fractional GPUs passed in, convert to int.
-        gpus=math.ceil(num_gpus),
+        gpus=num_gpus,
         logger=TensorBoardLogger(
             save_dir=tune.get_trial_dir(), name="", version="."),
         progress_bar_refresh_rate=0,
@@ -158,8 +155,7 @@ def train_mnist_tune_checkpoint(config,
                                 num_gpus=0):
     trainer = pl.Trainer(
         max_epochs=num_epochs,
-        # If fractional GPUs passed in, convert to int.
-        gpus=math.ceil(num_gpus),
+        gpus=num_gpus,
         logger=TensorBoardLogger(
             save_dir=tune.get_trial_dir(), name="", version="."),
         progress_bar_refresh_rate=0,

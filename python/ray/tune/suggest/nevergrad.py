@@ -1,7 +1,6 @@
-import inspect
 import logging
 import pickle
-from typing import Dict, Optional, Type, Union, List, Sequence
+from typing import Dict, Optional, Union, List, Sequence
 
 from ray.tune.result import DEFAULT_METRIC
 from ray.tune.sample import Categorical, Domain, Float, Integer, LogUniform, \
@@ -109,8 +108,7 @@ class NevergradSearch(Searcher):
     """
 
     def __init__(self,
-                 optimizer: Union[None, Optimizer, Type[Optimizer],
-                                  ConfiguredOptimizer] = None,
+                 optimizer: Union[None, Optimizer, ConfiguredOptimizer] = None,
                  space: Optional[Union[Dict, Parameter]] = None,
                  metric: Optional[str] = None,
                  mode: Optional[str] = None,
@@ -156,9 +154,7 @@ class NevergradSearch(Searcher):
                     "parameter.")
             self._parameters = space
             self._nevergrad_opt = optimizer
-        elif (inspect.isclass(optimizer)
-              and issubclass(optimizer, Optimizer)) or isinstance(
-                  optimizer, ConfiguredOptimizer):
+        elif isinstance(optimizer, ConfiguredOptimizer):
             self._opt_factory = optimizer
             self._parameters = None
             self._space = space

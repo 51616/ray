@@ -54,5 +54,3 @@ if __name__ == "__main__":
             "cpu": 1,
             "extra_cpu": 3
         })
-
-    print("PASSED.")

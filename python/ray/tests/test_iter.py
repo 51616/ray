@@ -1,4 +1,3 @@
-import sys
 import time
 import collections
 from collections import Counter
@@ -287,7 +286,6 @@ def test_filter(ray_start_regular_shared):
     assert list(it.gather_sync()) == [0, 2, 1]
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Failing on Windows.")
 def test_local_shuffle(ray_start_regular_shared):
     # confirm that no data disappears, and they all stay within the same shard
     it = from_range(8, num_shards=2).local_shuffle(shuffle_buffer_size=2)

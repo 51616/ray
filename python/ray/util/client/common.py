@@ -2,8 +2,6 @@ import ray.core.generated.ray_client_pb2 as ray_client_pb2
 from ray.util.client import ray
 from ray.util.client.options import validate_options
 
-import uuid
-import os
 import inspect
 from ray.util.inspect import is_cython
 import json
@@ -13,19 +11,6 @@ from typing import List
 from typing import Dict
 from typing import Optional
 from typing import Union
-
-# TODO: Instead of just making the max message size large, the right thing to
-# do is to split up the bytes representation of serialized data into multiple
-# messages and reconstruct them on either end. That said, since clients are
-# drivers and really just feed initial things in and final results out, (when
-# not going to S3 or similar) then a large limit will suffice for many use
-# cases.
-#
-# Currently, this is 2GiB, the max for a signed int.
-GRPC_MAX_MESSAGE_SIZE = (2 * 1024 * 1024 * 1024) - 1
-
-CLIENT_SERVER_MAX_THREADS = float(
-    os.getenv("RAY_CLIENT_SERVER_MAX_THREADS", 100))
 
 
 class ClientBaseRef:
@@ -85,7 +70,6 @@ class ClientRemoteFunc(ClientStub):
         self._func = f
         self._name = f.__name__
         self._ref = None
-        self._client_side_ref = ClientSideRefID.generate_id()
         self._options = validate_options(options)
 
     def __call__(self, *args, **kwargs):
@@ -98,11 +82,7 @@ class ClientRemoteFunc(ClientStub):
     def options(self, **kwargs):
         return OptionWrapper(self, kwargs)
 
-    def _remote(self, args=None, kwargs=None, **option_args):
-        if args is None:
-            args = []
-        if kwargs is None:
-            kwargs = {}
+    def _remote(self, args=[], kwargs={}, **option_args):
         return self.options(**option_args).remote(*args, **kwargs)
 
     def __repr__(self):
@@ -119,9 +99,8 @@ class ClientRemoteFunc(ClientStub):
                 # So we set the state of the reference to be an
                 # in-progress self reference value, which
                 # the encoding can detect and handle correctly.
-                self._ref = InProgressSentinel()
-                self._ref = ray.put(
-                    self._func, client_ref_id=self._client_side_ref.id)
+                self._ref = SelfReferenceSentinel()
+                self._ref = ray.put(self._func)
 
     def _prepare_client_task(self) -> ray_client_pb2.ClientTask:
         self._ensure_ref()
@@ -146,10 +125,8 @@ class ClientActorClass(ClientStub):
 
     def __init__(self, actor_cls, options=None):
         self.actor_cls = actor_cls
-        self._lock = threading.Lock()
         self._name = actor_cls.__name__
         self._ref = None
-        self._client_side_ref = ClientSideRefID.generate_id()
         self._options = validate_options(options)
 
     def __call__(self, *args, **kwargs):
@@ -157,14 +134,12 @@ class ClientActorClass(ClientStub):
                         "Use {self._name}.remote() instead")
 
     def _ensure_ref(self):
-        with self._lock:
-            if self._ref is None:
-                # As before, set the state of the reference to be an
-                # in-progress self reference value, which
-                # the encoding can detect and handle correctly.
-                self._ref = InProgressSentinel()
-                self._ref = ray.put(
-                    self.actor_cls, client_ref_id=self._client_side_ref.id)
+        if self._ref is None:
+            # As before, set the state of the reference to be an
+            # in-progress self reference value, which
+            # the encoding can detect and handle correctly.
+            self._ref = SelfReferenceSentinel()
+            self._ref = ray.put(self.actor_cls)
 
     def remote(self, *args, **kwargs) -> "ClientActorHandle":
         # Actually instantiate the actor
@@ -175,11 +150,7 @@ class ClientActorClass(ClientStub):
     def options(self, **kwargs):
         return ActorOptionWrapper(self, kwargs)
 
-    def _remote(self, args=None, kwargs=None, **option_args):
-        if args is None:
-            args = []
-        if kwargs is None:
-            kwargs = {}
+    def _remote(self, args=[], kwargs={}, **option_args):
         return self.options(**option_args).remote(*args, **kwargs)
 
     def __repr__(self):
@@ -259,11 +230,7 @@ class ClientRemoteMethod(ClientStub):
     def options(self, **kwargs):
         return OptionWrapper(self, kwargs)
 
-    def _remote(self, args=None, kwargs=None, **option_args):
-        if args is None:
-            args = []
-        if kwargs is None:
-            kwargs = {}
+    def _remote(self, args=[], kwargs={}, **option_args):
         return self.options(**option_args).remote(*args, **kwargs)
 
     def _prepare_client_task(self) -> ray_client_pb2.ClientTask:
@@ -317,22 +284,13 @@ def return_refs(ids: List[bytes]
     return [ClientObjectRef(id) for id in ids]
 
 
-class InProgressSentinel:
+class DataEncodingSentinel:
     def __repr__(self) -> str:
         return self.__class__.__name__
 
 
-class ClientSideRefID:
-    """An ID generated by the client for objects not yet given an ObjectRef"""
-
-    def __init__(self, id: bytes):
-        assert len(id) != 0
-        self.id = id
-
-    @staticmethod
-    def generate_id() -> "ClientSideRefID":
-        tid = uuid.uuid4()
-        return ClientSideRefID(b"\xcc" + tid.bytes)
+class SelfReferenceSentinel(DataEncodingSentinel):
+    pass
 
 
 def remote_decorator(options: Optional[Dict[str, Any]]):

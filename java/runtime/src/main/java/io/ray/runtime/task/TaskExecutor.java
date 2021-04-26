@@ -5,7 +5,6 @@ import io.ray.api.id.JobId;
 import io.ray.api.id.TaskId;
 import io.ray.api.id.UniqueId;
 import io.ray.runtime.RayRuntimeInternal;
-import io.ray.runtime.exception.RayActorException;
 import io.ray.runtime.exception.RayIntentionalSystemExitException;
 import io.ray.runtime.exception.RayTaskException;
 import io.ray.runtime.functionmanager.JavaFunctionDescriptor;
@@ -37,6 +36,9 @@ public abstract class TaskExecutor<T extends TaskExecutor.ActorContext> {
 
     /** The current actor object, if this worker is an actor, otherwise null. */
     Object currentActor = null;
+
+    /** The exception that failed the actor creation task, if any. */
+    Throwable actorCreationException = null;
   }
 
   TaskExecutor(RayRuntimeInternal runtime) {
@@ -88,7 +90,7 @@ public abstract class TaskExecutor<T extends TaskExecutor.ActorContext> {
     runtime.setIsContextSet(true);
     TaskType taskType = runtime.getWorkerContext().getCurrentTaskType();
     TaskId taskId = runtime.getWorkerContext().getCurrentTaskId();
-    LOGGER.debug("Executing task {} {}", taskId, rayFunctionInfo);
+    LOGGER.debug("Executing task {}", taskId);
 
     T actorContext = null;
     if (taskType == TaskType.ACTOR_CREATION_TASK) {
@@ -101,8 +103,6 @@ public abstract class TaskExecutor<T extends TaskExecutor.ActorContext> {
 
     List<NativeRayObject> returnObjects = new ArrayList<>();
     ClassLoader oldLoader = Thread.currentThread().getContextClassLoader();
-    // Find the executable object.
-
     RayFunction rayFunction = localRayFunction.get();
     try {
       // Find the executable object.
@@ -117,6 +117,9 @@ public abstract class TaskExecutor<T extends TaskExecutor.ActorContext> {
       // Get local actor object and arguments.
       Object actor = null;
       if (taskType == TaskType.ACTOR_TASK) {
+        if (actorContext.actorCreationException != null) {
+          throw actorContext.actorCreationException;
+        }
         actor = actorContext.currentActor;
       }
       Object[] args =
@@ -130,7 +133,6 @@ public abstract class TaskExecutor<T extends TaskExecutor.ActorContext> {
           result = rayFunction.getConstructor().newInstance(args);
         }
       } catch (InvocationTargetException e) {
-        LOGGER.error("Execute rayFunction {} failed. actor {}, args {}", rayFunction, actor, args);
         if (e.getCause() != null) {
           throw e.getCause();
         } else {
@@ -154,7 +156,6 @@ public abstract class TaskExecutor<T extends TaskExecutor.ActorContext> {
         throw (RayIntentionalSystemExitException) e;
       }
       LOGGER.error("Error executing task " + taskId, e);
-
       if (taskType != TaskType.ACTOR_CREATION_TASK) {
         boolean hasReturn = rayFunction != null && rayFunction.hasReturn();
         boolean isCrossLanguage = parseFunctionDescriptor(rayFunctionInfo).signature.equals("");
@@ -179,17 +180,9 @@ public abstract class TaskExecutor<T extends TaskExecutor.ActorContext> {
           }
           Preconditions.checkNotNull(serializedException);
           returnObjects.add(serializedException);
-        } else {
-          returnObjects.add(
-              ObjectSerializer.serialize(
-                  new RayTaskException(
-                      String.format(
-                          "Function %s of task %s doesn't exist",
-                          String.join(".", rayFunctionInfo), taskId),
-                      e)));
         }
       } else {
-        throw new RayActorException(e);
+        actorContext.actorCreationException = e;
       }
     } finally {
       Thread.currentThread().setContextClassLoader(oldLoader);
